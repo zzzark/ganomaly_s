@@ -111,6 +111,7 @@ class Decoder(nn.Module):
             cngf = cngf // 2
             csize = csize * 2
 
+
         # Extra layers
         for t in range(n_extra_layers):
             main.add_module('extra-layers-{0}-{1}-conv'.format(t, cngf),
@@ -147,6 +148,7 @@ class NetD(nn.Module):
 
         self.features = nn.Sequential(*layers[:-1])
         self.classifier = nn.Sequential(layers[-1])
+        #self.classifier.add_module('Tanh', nn.Tanh())
         self.classifier.add_module('Sigmoid', nn.Sigmoid())
 
     def forward(self, x):
@@ -156,7 +158,6 @@ class NetD(nn.Module):
         classifier = classifier.view(-1, 1).squeeze(1)
 
         return classifier, features
-
 ##
 class NetG(nn.Module):
     """

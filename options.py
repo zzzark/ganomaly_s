@@ -51,6 +51,7 @@ class Options():
         self.parser.add_argument('--abnormal_class', default='car', help='Anomaly class idx for mnist and cifar datasets')
         self.parser.add_argument('--proportion', type=float, default=0.1, help='Proportion of anomalies in test set.')
         self.parser.add_argument('--metric', type=str, default='roc', help='Evaluation metric.')
+        self.parser.add_argument('--strengthen', action='store_true', help='Use strengthen tools.')
 
         ##
         # Train

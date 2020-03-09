@@ -37,3 +37,18 @@ def l2_loss(input, target, size_average=True):
         return torch.mean(torch.pow((input-target), 2))
     else:
         return torch.pow((input-target), 2)
+
+def l3_loss(input, target, size_average=True):
+    """ L3 Loss without reduce flag.
+
+    Args:
+        input (FloatTensor): Input tensor
+        target (FloatTensor): Output tensor
+
+    Returns:
+        [FloatTensor]: L3 distance between input and output
+    """
+    if size_average:
+        return torch.mean(torch.pow((input-target), 3))
+    else:
+        return torch.pow((input-target), 3)

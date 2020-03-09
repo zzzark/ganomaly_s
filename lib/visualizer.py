@@ -9,6 +9,9 @@ import os
 import time
 import numpy as np
 import torchvision.utils as vutils
+import plotly.express as px
+import plotly.figure_factory as ff
+
 
 ##
 class Visualizer():
@@ -87,7 +90,7 @@ class Visualizer():
                 'xlabel': 'Epoch',
                 'ylabel': 'Loss'
             },
-            win=4
+            win=5
         )
 
     ##
@@ -112,7 +115,7 @@ class Visualizer():
                 'xlabel': 'Epoch',
                 'ylabel': 'Stats'
             },
-            win=5
+            win=6
         )
 
     ##
@@ -151,6 +154,7 @@ class Visualizer():
         with open(self.log_name, "a") as log_file:
             log_file.write('%s\n' % message)
 
+    ##
     def display_current_images(self, reals, fakes, fixed):
         """ Display current images.
 
@@ -164,10 +168,60 @@ class Visualizer():
         reals = self.normalize(reals.cpu().numpy())
         fakes = self.normalize(fakes.cpu().numpy())
         fixed = self.normalize(fixed.cpu().numpy())
+        fixed_reals = self.normalize(self.fixed_input.cpu().numpy())
 
         self.vis.images(reals, win=1, opts={'title': 'Reals'})
         self.vis.images(fakes, win=2, opts={'title': 'Fakes'})
         self.vis.images(fixed, win=3, opts={'title': 'Fixed'})
+        self.vis.images(fixed_reals, win=4, opts={'title': 'fixed_reals'})
+
+    ##point
+    def display_current_images(self, reals, fakes, fixed, fixed_reals):
+        """ Display current images.
+
+        Args:
+            epoch (int): Current epoch
+            counter_ratio (float): Ratio to plot the range between two epoch.
+            reals ([FloatTensor]): Real Image
+            fakes ([FloatTensor]): Fake Image
+            fixed ([FloatTensor]): Fixed Fake Image
+            fixed_reals ([FloatTensor]): Fixed real Image
+        """
+        reals = self.normalize(reals.cpu().numpy())
+        fakes = self.normalize(fakes.cpu().numpy())
+        fixed = self.normalize(fixed.cpu().numpy())
+        fixed_reals = self.normalize(fixed_reals.cpu().numpy())
+
+        self.vis.images(reals, win=1, opts={'title': 'Reals'})
+        self.vis.images(fakes, win=2, opts={'title': 'Fakes'})
+        self.vis.images(fixed, win=3, opts={'title': 'Fixed'})
+        self.vis.images(fixed_reals, win=4, opts={'title': 'fixed_reals'})
+
+    def display_curent_images_info(self, fix_fake_label, fix_real_label):
+
+        pass
+
+    def display_current_images_test(self, reals, fakes, fixed, fixed_reals):
+        """ Display current images.
+
+        Args:
+            epoch (int): Current epoch
+            counter_ratio (float): Ratio to plot the range between two epoch.
+            reals ([FloatTensor]): Real Image
+            fakes ([FloatTensor]): Fake Image
+            fixed ([FloatTensor]): Fixed Fake Image
+            fixed_reals ([FloatTensor]): Fixed real Image
+        """
+        reals = self.normalize(reals.cpu().numpy())
+        fakes = self.normalize(fakes.cpu().numpy())
+        fixed = self.normalize(fixed.cpu().numpy())
+        fixed_reals = self.normalize(fixed_reals.cpu().numpy())
+
+        self.vis.images(reals, win=1, opts={'title': 'Reals'})
+        self.vis.images(fakes, win=2, opts={'title': 'Fakes'})
+        self.vis.images(fixed, win=3, opts={'title': 'Fixed'})
+        self.vis.images(fixed_reals, win=4, opts={'title': 'fixed_reals'})
+
 
     def save_current_images(self, epoch, reals, fakes, fixed):
         """ Save images for epoch i.
@@ -181,3 +235,80 @@ class Visualizer():
         vutils.save_image(reals, '%s/reals.png' % self.img_dir, normalize=True)
         vutils.save_image(fakes, '%s/fakes.png' % self.img_dir, normalize=True)
         vutils.save_image(fixed, '%s/fixed_fakes_%03d.png' %(self.img_dir, epoch+1), normalize=True)
+
+    def save_current_images_s(self, epoch, reals, fakes, fixed, fixed_reals):
+        """ Save images for epoch i.
+
+        Args:
+            epoch ([int])        : Current epoch
+            reals ([FloatTensor]): Real Image
+            fakes ([FloatTensor]): Fake Image
+            fixed ([FloatTensor]): Fixed Fake Image
+            fixed_reals ([FloatTensor]): Fixed Real Image
+        """
+        vutils.save_image(reals, '%s/reals.png' % self.img_dir, normalize=True)
+        vutils.save_image(fakes, '%s/fakes.png' % self.img_dir, normalize=True)
+        vutils.save_image(fixed, '%s/fixed_fakes_%03d.png' % (self.img_dir, epoch+1), normalize=True)
+        vutils.save_image(fixed_reals, '%s/fixed_real.png' % (self.img_dir), normalize=True)
+
+    def save_fixed_real_s(self, fixed_reals):
+        vutils.save_image(fixed_reals, '%s/fixed_reals.png' % (self.img_dir), normalize=True)
+
+
+    def display_scores_histo(self, epoch, scores, labels):
+        """Display Histogram of the scores for both normal and abnormal test samples
+
+        Args
+
+        """
+        scores = scores.cpu().numpy()
+        labels = labels.cpu().numpy()
+        abn_score = []
+        nor_score = []
+
+        for i, score in enumerate(scores, 0):
+            if labels[i] == 1:
+                abn_score.append(score)
+            elif labels[i] == 0:
+                nor_score.append(score)
+
+        hist_data = [abn_score, nor_score]
+        group_labels = ['Abnormal', 'Normal']
+
+        fig = ff.create_distplot(hist_data, group_labels, bin_size=0.04)
+        self.vis.plotlyplot(fig, win=7)
+
+    def display_feature(self, features, labels, alg='t-SNE', win=8, iter=1000):
+
+        labelss = labels[:iter].cpu().numpy()
+        labels = [i+1 for i in labelss]
+        features = features[:iter].cpu().numpy().reshape(iter, -1)
+
+        if alg == 't-SNE':
+            from sklearn.manifold import TSNE
+
+            tsne = TSNE(n_components=3, perplexity=40, learning_rate=140, n_iter=1000)
+            tsne.fit_transform(features)
+
+            self.vis.scatter(X=tsne.embedding_, Y=labels, win=win, opts={
+                'markersize': 1,
+            })
+
+
+
+
+
+"""        self.vis.histogram(X=abn_score, win=7, opts={
+            'stucked': False,
+            'numbins': 50,
+            'color': 'blue'
+
+        })
+        self.vis.histogram(X=[nor_score], win=8, opts={
+            'stucked': False,
+            'numbins': 50,
+            'opacity': 0.1,
+            'color': 'red'
+        })
+"""
+
