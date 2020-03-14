@@ -293,30 +293,21 @@ class Visualizer():
                 legend=['Normal', 'Abnormal']
             ))
 
-    def display_latent(self, latent_is, latent_os, labels, win=9, iter=1000, message=False ,n_components=2):
+    def display_latent(self, latent_is, latent_os, labels, win=9, iter=1000, message=False, n_components=2):
         from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
-        # pos = []
-        # neg = []
-        # for i, label in enumerate(labels):
-        #     if label == 0 and len(neg) < iter:
-        #         neg.append(latent_is[i])
-        #         neg.append(latent_os[i])
-        #     elif label == 1 and len(pos) < iter:
-        #         neg.append(latent_is[i])
-        #         neg.append(latent_os[i])
-        #     if len(neg) >= iter and len(pos) >= iter:
-        #         break
+        if message:print('latent visualizer loading data')
         latent_i = latent_is[:iter].cpu().numpy()
         latent_o = latent_os[:iter].cpu().numpy()
         latent = np.concatenate([latent_i, latent_o])
         label = labels[:iter].cpu().numpy() + np.ones(1000)
         label = np.concatenate([label, label+np.ones(1000)*2])
 
-        lda = LinearDiscriminantAnalysis(n_components=2)
+        lda = LinearDiscriminantAnalysis(n_components=n_components)
         lda.fit(latent, label)
         X_new = lda.transform(latent)
+
         self.vis.scatter(X=X_new, Y=label, win=win, opts=dict(
             markersize=3,
-            legend=['i_Normal', 'i_Abnormal', 'o_Normal', 'o_Abnormal']
+            legend=['Normal_i', 'Abnormal_i', 'Normal_o', 'Abnormal_o']
         ))

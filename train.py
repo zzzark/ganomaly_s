@@ -21,7 +21,7 @@ from options import Options
 from lib.data import load_data
 from lib.model import Ganomaly
 
-##
+
 def train():
     """ Training
     """
@@ -38,6 +38,7 @@ def train():
     ##
     # TRAIN MODEL
     model.train()
+
 
 if __name__ == '__main__':
     train()

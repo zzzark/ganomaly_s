@@ -51,8 +51,10 @@ class Options():
         self.parser.add_argument('--abnormal_class', default='car', help='Anomaly class idx for mnist and cifar datasets')
         self.parser.add_argument('--proportion', type=float, default=0.1, help='Proportion of anomalies in test set.')
         self.parser.add_argument('--metric', type=str, default='roc', help='Evaluation metric.')
-        self.parser.add_argument('--strengthen', action='store_true', help='Use strengthen tools.')
-
+        ##
+        #strengthen
+        self.parser.add_argument('--strengthen', type=int, default=0, help='Use strengthen tools.')
+        self.parser.add_argument('--tSNE', action='store_true', help='display t-SNE images, it will influent cpu')
         ##
         # Train
         self.parser.add_argument('--print_freq', type=int, default=100, help='frequency of showing training results on console')

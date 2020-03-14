@@ -298,7 +298,7 @@ class BaseModel():
                                      args=(self.last_feature, self.gt_labels))
                     t2 = threading.Thread(target=self.visualizer.display_latent,
                                           name='latent LDA visualizer',
-                                          args=(self.latent_i, self.latent_o, self.gt_labels))
+                                          args=(self.latent_i, self.latent_o, self.gt_labels, 9, 1000,True))
                     t1.start()
                     t2.start()
 
