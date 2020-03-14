@@ -7,6 +7,7 @@ from collections import OrderedDict
 import os
 import time
 import numpy as np
+import threading
 from tqdm import tqdm
 
 from torch.autograd import Variable
@@ -125,15 +126,10 @@ class BaseModel():
 
         weight_dir = os.path.join(self.opt.outf, self.opt.name, 'train', 'weights')
         if not os.path.exists(weight_dir): os.makedirs(weight_dir)
-        if self.opt.strengthen:
-            torch.save({'epoch': epoch + 1, 'state_dict': self.netg.state_dict()},
-                       '%s/netG%d.pth' % (weight_dir,self.opt.nz))
-            torch.save({'epoch': epoch + 1, 'state_dict': self.netd.state_dict()},
-                       '%s/netD%d.pth' % (weight_dir, self.opt.nz))
-        else:
-            torch.save({'epoch': epoch + 1, 'state_dict': self.netg.state_dict()},
+
+        torch.save({'epoch': epoch + 1, 'state_dict': self.netg.state_dict()},
                    '%s/netG.pth' % (weight_dir))
-            torch.save({'epoch': epoch + 1, 'state_dict': self.netd.state_dict()},
+        torch.save({'epoch': epoch + 1, 'state_dict': self.netd.state_dict()},
                    '%s/netD.pth' % (weight_dir))
 
     ##
@@ -290,8 +286,21 @@ class BaseModel():
             performance = OrderedDict([('Avg Run Time (ms/batch)', self.times), ('AUC', auc)])
 
             if self.opt.strengthen and self.opt.phase == 'test':
-                self.visualizer.display_scores_histo(self.epoch, self.an_scores, self.gt_labels)
-                self.visualizer.display_feature(self.last_feature, self.gt_labels)
+                # self.visualizer.display_scores_histo(self.epoch, self.an_scores, self.gt_labels)
+                # self.visualizer.display_feature(self.last_feature, self.gt_labels)
+                t0 = threading.Thread(target=self.visualizer.display_scores_histo,
+                                     name='histogram ',
+                                     args=(self.epoch, self.an_scores, self.gt_labels))
+                t0.start()
+                if self.opt.strengthen > 1:
+                    t1 = threading.Thread(target=self.visualizer.display_feature,
+                                     name='t-SNE visualizer',
+                                     args=(self.last_feature, self.gt_labels))
+                    t2 = threading.Thread(target=self.visualizer.display_latent,
+                                          name='latent LDA visualizer',
+                                          args=(self.latent_i, self.latent_o, self.gt_labels))
+                    t1.start()
+                    t2.start()
 
             if self.opt.display_id > 0 and self.opt.phase == 'test':
                 counter_ratio = float(epoch_iter) / len(self.dataloader['test'].dataset)
@@ -417,5 +426,4 @@ class Ganomaly(BaseModel):
         self.backward_d()
         self.optimizer_d.step()
         if self.err_d.item() < 1e-5: self.reinit_d()
-
 

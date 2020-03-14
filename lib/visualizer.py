@@ -9,7 +9,7 @@ import os
 import time
 import numpy as np
 import torchvision.utils as vutils
-import plotly.express as px
+import matplotlib.pyplot as plt
 import plotly.figure_factory as ff
 
 
@@ -20,6 +20,7 @@ class Visualizer():
     Returns:
         Visualizer: Class file.
     """
+
     # pylint: disable=too-many-instance-attributes
     # Reasonable.
 
@@ -222,7 +223,6 @@ class Visualizer():
         self.vis.images(fixed, win=3, opts={'title': 'Fixed'})
         self.vis.images(fixed_reals, win=4, opts={'title': 'fixed_reals'})
 
-
     def save_current_images(self, epoch, reals, fakes, fixed):
         """ Save images for epoch i.
 
@@ -234,32 +234,19 @@ class Visualizer():
         """
         vutils.save_image(reals, '%s/reals.png' % self.img_dir, normalize=True)
         vutils.save_image(fakes, '%s/fakes.png' % self.img_dir, normalize=True)
-        vutils.save_image(fixed, '%s/fixed_fakes_%03d.png' %(self.img_dir, epoch+1), normalize=True)
-
-    def save_current_images_s(self, epoch, reals, fakes, fixed, fixed_reals):
-        """ Save images for epoch i.
-
-        Args:
-            epoch ([int])        : Current epoch
-            reals ([FloatTensor]): Real Image
-            fakes ([FloatTensor]): Fake Image
-            fixed ([FloatTensor]): Fixed Fake Image
-            fixed_reals ([FloatTensor]): Fixed Real Image
-        """
-        vutils.save_image(reals, '%s/reals.png' % self.img_dir, normalize=True)
-        vutils.save_image(fakes, '%s/fakes.png' % self.img_dir, normalize=True)
-        vutils.save_image(fixed, '%s/fixed_fakes_%03d.png' % (self.img_dir, epoch+1), normalize=True)
-        vutils.save_image(fixed_reals, '%s/fixed_real.png' % (self.img_dir), normalize=True)
+        vutils.save_image(fixed, '%s/fixed_fakes_%03d.png' % (self.img_dir, epoch + 1), normalize=True)
 
     def save_fixed_real_s(self, fixed_reals):
         vutils.save_image(fixed_reals, '%s/fixed_reals.png' % (self.img_dir), normalize=True)
 
+    def display_scores_histo(self, epoch, scores, labels, win=7):
+        """
+        Display Histogram of the scores for both normal and abnormal test samples
 
-    def display_scores_histo(self, epoch, scores, labels):
-        """Display Histogram of the scores for both normal and abnormal test samples
-
-        Args
-
+        :param epoch:
+        :param scores:
+        :param labels:
+        :return:
         """
         scores = scores.cpu().numpy()
         labels = labels.cpu().numpy()
@@ -276,39 +263,60 @@ class Visualizer():
         group_labels = ['Abnormal', 'Normal']
 
         fig = ff.create_distplot(hist_data, group_labels, bin_size=0.04)
-        self.vis.plotlyplot(fig, win=7)
+        self.vis.plotlyplot(fig, win=win)
 
-    def display_feature(self, features, labels, alg='t-SNE', win=8, iter=1000):
+    def display_feature(self, features, labels, alg='t-SNE', win=8, iter=1000, message=False):
+        """
 
+        :param features: feature maps
+        :param labels: labels
+        :param alg:
+        :param win: display window_id
+        :param iter:  quantity of marker
+
+        :return: None
+        """
         labelss = labels[:iter].cpu().numpy()
-        labels = [i+1 for i in labelss]
+        labels = [i + 1 for i in labelss]
         features = features[:iter].cpu().numpy().reshape(iter, -1)
 
         if alg == 't-SNE':
             from sklearn.manifold import TSNE
 
             tsne = TSNE(n_components=3, perplexity=40, learning_rate=140, n_iter=1000)
+            if message: print("Start calculating t-SNE")
             tsne.fit_transform(features)
+            if message: print("Finish calculation, Printing visual image")
 
-            self.vis.scatter(X=tsne.embedding_, Y=labels, win=win, opts={
-                'markersize': 1,
-            })
+            self.vis.scatter(X=tsne.embedding_, Y=labels, win=win, opts=dict(
+                markersize=1,
+                legend=['Normal', 'Abnormal']
+            ))
 
+    def display_latent(self, latent_is, latent_os, labels, win=9, iter=1000, message=False ,n_components=2):
+        from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
+        # pos = []
+        # neg = []
+        # for i, label in enumerate(labels):
+        #     if label == 0 and len(neg) < iter:
+        #         neg.append(latent_is[i])
+        #         neg.append(latent_os[i])
+        #     elif label == 1 and len(pos) < iter:
+        #         neg.append(latent_is[i])
+        #         neg.append(latent_os[i])
+        #     if len(neg) >= iter and len(pos) >= iter:
+        #         break
+        latent_i = latent_is[:iter].cpu().numpy()
+        latent_o = latent_os[:iter].cpu().numpy()
+        latent = np.concatenate([latent_i, latent_o])
+        label = labels[:iter].cpu().numpy() + np.ones(1000)
+        label = np.concatenate([label, label+np.ones(1000)*2])
 
-
-
-"""        self.vis.histogram(X=abn_score, win=7, opts={
-            'stucked': False,
-            'numbins': 50,
-            'color': 'blue'
-
-        })
-        self.vis.histogram(X=[nor_score], win=8, opts={
-            'stucked': False,
-            'numbins': 50,
-            'opacity': 0.1,
-            'color': 'red'
-        })
-"""
-
+        lda = LinearDiscriminantAnalysis(n_components=2)
+        lda.fit(latent, label)
+        X_new = lda.transform(latent)
+        self.vis.scatter(X=X_new, Y=label, win=win, opts=dict(
+            markersize=3,
+            legend=['i_Normal', 'i_Abnormal', 'o_Normal', 'o_Abnormal']
+        ))
