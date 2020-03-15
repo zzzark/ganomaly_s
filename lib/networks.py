@@ -148,7 +148,6 @@ class NetD(nn.Module):
 
         self.features = nn.Sequential(*layers[:-1])
         self.classifier = nn.Sequential(layers[-1])
-        #self.classifier.add_module('Tanh', nn.Tanh())
         self.classifier.add_module('Sigmoid', nn.Sigmoid())
 
     def forward(self, x):
@@ -175,3 +174,34 @@ class NetG(nn.Module):
         gen_imag = self.decoder(latent_i)
         latent_o = self.encoder2(gen_imag)
         return gen_imag, latent_i, latent_o
+
+##
+class NetC(nn.Module):
+    """
+    CLASSIFIER NETWORK
+    """
+
+    def __init__(self,opt):
+        super(NetC, self).__init__()
+        model = Encoder(opt.nz*0.5, 1, opt.nc, opt.ngf, opt.ngpu, opt.extralayers)
+        layers = list(model.main.children())
+
+        self.features_i = nn.Sequential(*layers[:-1])
+        self.classifier_i = nn.Sequential(layers[-1])
+        self.classifier_i.add_module('Sigmoid', nn.Sigmoid())
+
+        self.features_o = nn.Sequential(*layers[:-1])
+        self.classifier_o = nn.Sequential(layers[-1])
+        self.classifier_o.add_module('Sigmoid', nn.Sigmoid())
+
+    def forward(self, z):
+        features_i = self.features_i(z)
+        classifier_i = self.classifier_i(features_i)
+        classifier_i = classifier_i.add_module('Sigmoid', nn.Sigmoid())
+
+        features_o = self.features_o(z)
+        classifier_o = self.classifier_o(features_o)
+        classifier_o = classifier_o.add_module('Sigmoid', nn.Sigmoid())
+
+        return classifier_i, classifier_o
+
