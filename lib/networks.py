@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.parallel
 
+
 ##
 def weights_init(mod):
     """
@@ -20,6 +21,7 @@ def weights_init(mod):
     elif classname.find('BatchNorm') != -1:
         mod.weight.data.normal_(1.0, 0.02)
         mod.bias.data.fill_(0)
+
 
 ###
 class Encoder(nn.Module):
@@ -76,11 +78,13 @@ class Encoder(nn.Module):
 
         return output
 
+
 ##
 class Decoder(nn.Module):
     """
     DCGAN DECODER NETWORK
     """
+
     def __init__(self, isize, nz, nc, ngf, ngpu, n_extra_layers=0):
         super(Decoder, self).__init__()
         self.ngpu = ngpu
@@ -110,7 +114,6 @@ class Decoder(nn.Module):
                             nn.ReLU(True))
             cngf = cngf // 2
             csize = csize * 2
-
 
         # Extra layers
         for t in range(n_extra_layers):
@@ -157,6 +160,8 @@ class NetD(nn.Module):
         classifier = classifier.view(-1, 1).squeeze(1)
 
         return classifier, features
+
+
 ##
 class NetG(nn.Module):
     """
@@ -175,33 +180,26 @@ class NetG(nn.Module):
         latent_o = self.encoder2(gen_imag)
         return gen_imag, latent_i, latent_o
 
+
 ##
 class NetC(nn.Module):
     """
     CLASSIFIER NETWORK
     """
 
-    def __init__(self,opt):
+    def __init__(self, opt):
         super(NetC, self).__init__()
-        model = Encoder(opt.nz*0.5, 1, opt.nc, opt.ngf, opt.ngpu, opt.extralayers)
+        model = Encoder(opt.nz * 0.5, 1, opt.nc, opt.ngf, opt.ngpu, opt.extralayers)
         layers = list(model.main.children())
 
-        self.features_i = nn.Sequential(*layers[:-1])
-        self.classifier_i = nn.Sequential(layers[-1])
-        self.classifier_i.add_module('Sigmoid', nn.Sigmoid())
-
-        self.features_o = nn.Sequential(*layers[:-1])
-        self.classifier_o = nn.Sequential(layers[-1])
-        self.classifier_o.add_module('Sigmoid', nn.Sigmoid())
+        self.features_io = nn.Sequential(*layers[:-1])
+        self.classifier_io = nn.Sequential(layers[-1])
+        self.classifier_io.add_module('Sigmoid', nn.Sigmoid())
 
     def forward(self, z):
-        features_i = self.features_i(z)
-        classifier_i = self.classifier_i(features_i)
-        classifier_i = classifier_i.add_module('Sigmoid', nn.Sigmoid())
+        features_io = self.features_io(z)
+        features_io = features_io
+        classifier_io = self.classifier_i(features_io)
+        classifier_io = classifier_io.add_module('Sigmoid', nn.Sigmoid())
 
-        features_o = self.features_o(z)
-        classifier_o = self.classifier_o(features_o)
-        classifier_o = classifier_o.add_module('Sigmoid', nn.Sigmoid())
-
-        return classifier_i, classifier_o
-
+        return classifier_io, features_io

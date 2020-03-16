@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
-# @Time : 2020/3/11 下午9:06
+# @Time : 2020/3/16 下午10:01
 # @Author : Yulin Liu
 # @Site : 
-# @File : test.py.py
+# @File : train_z.py
 # @Software: PyCharm
 
 from __future__ import print_function
@@ -11,10 +11,8 @@ from options import Options
 from lib.data import load_data
 from lib.model import Ganomaly
 
-##
 
-
-def test():
+def train():
     """ Training
     """
 
@@ -28,15 +26,9 @@ def test():
     # LOAD MODEL
     model = Ganomaly(opt, dataloader)
     ##
-    # MODEL TEST
-    res = model.test()
-
-
-    print('AUC:%f\n' % res['AUC'])
-
-
-
+    # TRAIN MODEL
+    model.train()
 
 
 if __name__ == '__main__':
-    test()
+    train()

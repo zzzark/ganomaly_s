@@ -455,6 +455,20 @@ class Classifier(Ganomaly):
             self.optimizer_i = optim.Adam(self.netc_i.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
             self.optimizer_o = optim.Adam(self.netc_o.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
 
+    def save_weights_z(self, epoch):
+        """Save netG and netD weights for the current epoch.
+
+        Args:
+            epoch ([int]): Current epoch number.
+        """
+
+        weight_dir = os.path.join(self.opt.outf, self.opt.name, 'train', 'weights')
+        if not os.path.exists(weight_dir): os.makedirs(weight_dir)
+
+        torch.save({'epoch': epoch + 1, 'state_dict': self.netC_i.state_dict()},
+                   '%s/netC_i.pth' % (weight_dir))
+        torch.save({'epoch': epoch + 1, 'state_dict': self.netC_o.state_dict()},
+                   '%s/netC_o.pth' % (weight_dir))
 
     def forward_i(self):
         """ Forward propagate through netC_i
