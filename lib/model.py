@@ -16,7 +16,7 @@ import torch.nn as nn
 import torch.utils.data
 import torchvision.utils as vutils
 
-from lib.networks import NetG, NetD, weights_init
+from lib.networks import NetG, NetD, NetC, weights_init
 from lib.visualizer import Visualizer
 from lib.loss import l1_loss, l2_loss, l3_loss
 from lib.evaluate import evaluate
@@ -55,8 +55,6 @@ class BaseModel():
             if self.total_steps == self.opt.batchsize:
                 self.fixed_input.resize_(input[0].size()).copy_(input[0])
                 self.visualizer.save_fixed_real_s(self.fixed_input)
-
-
 
     ##
     def seed(self, seed_value):
@@ -110,12 +108,6 @@ class BaseModel():
         # point
         return reals, fakes, fixed, fixed_reals
 
-    ##point
-    def get_low_scores_images(self):
-        """
-        """
-        return
-
     ##
     def save_weights(self, epoch):
         """Save netG and netD weights for the current epoch.
@@ -139,7 +131,7 @@ class BaseModel():
 
         self.netg.train()
         if self.opt.strengthen:
-            self.netd.train() ## point
+            self.netd.train()  ## point
         epoch_iter = 0
         for data in tqdm(self.dataloader['train'], leave=False, total=len(self.dataloader['train'])):
             self.total_steps += self.opt.batchsize
@@ -225,10 +217,10 @@ class BaseModel():
             self.latent_o = torch.zeros(size=(len(self.dataloader['test'].dataset), self.opt.nz), dtype=torch.float32,
                                         device=self.device)
             self.last_feature = torch.zeros(size=(
-                    len(self.dataloader['test'].dataset),
-                    list(self.netd.children())[0][-3].out_channels,
-                    list(self.netd.children())[0][-3].kernel_size[0],
-                    list(self.netd.children())[0][-3].kernel_size[1]
+                len(self.dataloader['test'].dataset),
+                list(self.netd.children())[0][-3].out_channels,
+                list(self.netd.children())[0][-3].kernel_size[0],
+                list(self.netd.children())[0][-3].kernel_size[1]
             ), dtype=torch.float32, device=self.device)
 
             self.times = []
@@ -266,12 +258,25 @@ class BaseModel():
                     dst = os.path.join(self.opt.outf, self.opt.name, 'test', 'images')
                     if not os.path.isdir(dst):
                         os.makedirs(dst)
-                    real, fake, _, _ = self.get_current_images() #point add attribute fixed_real
+                    real, fake, _, _ = self.get_current_images()  # point add attribute fixed_real
                     vutils.save_image(real, '%s/real_%03d.eps' % (dst, i + 1), normalize=True)
                     vutils.save_image(fake, '%s/fake_%03d.eps' % (dst, i + 1), normalize=True)
+            """
+            data=[]
+            feature = self.last_feature.cpu().numpy().reshape(self.last_feature.size()[0], -1)
+            label = self.gt_labels.cpu().numpy().reshape(self.last_feature.size()[0], -1)
 
-
-
+            features_dir = './features'
+            file_name = 'features_map.csv'
+            feature_path = os.path.join(features_dir, file_name + '.txt')
+            import pandas as pd
+            feature.tolist()
+            label.tolist()
+            test = pd.DataFrame(data=feature)
+            test.to_csv("./1.csv", mode='a+', index=None, header=None)
+            test = pd.DataFrame(data=label)
+            test.to_csv("./2.csv", mode='a+', index=None, header=None)
+            print('END')"""
 
             # Measure inference time.
             self.times = np.array(self.times)
@@ -279,7 +284,7 @@ class BaseModel():
 
             # Scale error vector between [0, 1]
             self.an_scores = (self.an_scores - torch.min(self.an_scores)) / (
-                        torch.max(self.an_scores) - torch.min(self.an_scores))
+                    torch.max(self.an_scores) - torch.min(self.an_scores))
 
             # auc, eer = roc(self.gt_labels, self.an_scores)
             auc = evaluate(self.gt_labels, self.an_scores, metric=self.opt.metric)
@@ -289,16 +294,16 @@ class BaseModel():
                 # self.visualizer.display_scores_histo(self.epoch, self.an_scores, self.gt_labels)
                 # self.visualizer.display_feature(self.last_feature, self.gt_labels)
                 t0 = threading.Thread(target=self.visualizer.display_scores_histo,
-                                     name='histogram ',
-                                     args=(self.epoch, self.an_scores, self.gt_labels))
+                                      name='histogram ',
+                                      args=(self.epoch, self.an_scores, self.gt_labels))
                 t0.start()
                 if self.opt.strengthen > 1:
                     t1 = threading.Thread(target=self.visualizer.display_feature,
-                                     name='t-SNE visualizer',
-                                     args=(self.last_feature, self.gt_labels))
+                                          name='t-SNE visualizer',
+                                          args=(self.last_feature, self.gt_labels))
                     t2 = threading.Thread(target=self.visualizer.display_latent,
                                           name='latent LDA visualizer',
-                                          args=(self.latent_i, self.latent_o, self.gt_labels, 9, 1000,True))
+                                          args=(self.latent_i, self.latent_o, self.gt_labels, 9, 1000, True))
                     t1.start()
                     t2.start()
 
@@ -406,7 +411,7 @@ class Ganomaly(BaseModel):
         """ Re-initialize the weights of netD
         """
         self.netd.apply(weights_init)
-        if(self.opt.strengthen != 1): print('   Reloading net d')
+        if (self.opt.strengthen != 1): print('   Reloading net d')
 
     def optimize_params(self):
         """ Forwardpass, Loss Computation and Backwardpass.
@@ -426,4 +431,88 @@ class Ganomaly(BaseModel):
         self.backward_d()
         self.optimizer_d.step()
         if self.err_d.item() < 1e-5: self.reinit_d()
+
+
+class Classifier(Ganomaly):
+    """Classifier Class
+    """
+
+    @property
+    def name(self):
+        return 'Classifier'
+
+    def __init__(self, opt, dataloader):
+        super(Ganomaly, self).__init__(opt, dataloader)
+
+        self.netc_i = NetC(self.opt).to(self.device)
+        self.netc_o = NetC(self.opt).to(self.device)
+        self.netc_i.apply(weights_init)
+        self.netc_o.apply(weights_init)
+
+        if self.opt.isTrain:
+            self.netc_i.train()
+            self.netc_o.train()
+            self.optimizer_i = optim.Adam(self.netc_i.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
+            self.optimizer_o = optim.Adam(self.netc_o.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
+
+
+    def forward_i(self):
+        """ Forward propagate through netC_i
+        """
+        self.pred_abn_i = self.netc_i(self.input)
+
+    def forward_o(self):
+        """ Forward propagate through netC_o
+        """
+        self.pred_abn_o = self.netc_o(self.input)
+
+    def backward_i(self):
+        """ Backpropagate through netC_i
+        """
+        # Real - Fake Loss
+        self.err_i = self.l_bce(self.pred_abn_i, self.real_label)
+
+        # NetD Loss & Backward-Pass
+        self.err_i.backward()
+
+    def backward_o(self):
+        """ Backpropagate through netC_o
+        """
+        # Real - Fake Loss
+        self.err_o = self.l_bce(self.pred_abn_o, self.real_label)
+
+        # NetD Loss & Backward-Pass
+        self.err_o.backward()
+
+    def reinit_i(self):
+        """ Re-initialize the weights of netC_i
+        """
+        self.netc_i.apply(weights_init)
+        if (self.opt.strengthen != 1): print('   Reloading net i')
+
+    def reinit_o(self):
+        """ Re-initialize the weights of netC_o
+        """
+        self.netc_o.apply(weights_init)
+        if (self.opt.strengthen != 1): print('   Reloading net o')
+
+    def optimize_params(self):
+        """ Forwardpass, Loss Computation and Backwardpass.
+        """
+        # Forward-pass
+        self.forward_i()
+        self.forward_o()
+
+        # Backward-pass
+        # netc_i
+        self.optimizer_i.zero_grad()
+        self.backward_i()
+        self.optimizer_i.step()
+
+        # netc_o
+        self.optimizer_o.zero_grad()
+        self.backward_o()
+        self.optimizer_o.step()
+        if self.err_i.item() < 1e-5: self.reinit_i()
+        if self.err_i.item() < 1e-5: self.reinit_o()
 
