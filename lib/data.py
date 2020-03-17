@@ -12,7 +12,9 @@ import torchvision.datasets as datasets
 from torchvision.datasets import MNIST
 from torchvision.datasets import CIFAR10
 from torchvision.datasets import ImageFolder
+from torch.utils.data import TensorDataset
 import torchvision.transforms as transforms
+
 
 ##
 def load_data(opt):
@@ -71,7 +73,7 @@ def load_data(opt):
                                                      num_workers=int(opt.workers),
                                                      drop_last=drop_last_batch[x],
                                                      worker_init_fn=(None if opt.manualseed == -1
-                                                     else lambda x: np.random.seed(opt.manualseed)))
+                                                                     else lambda x: np.random.seed(opt.manualseed)))
                       for x in splits}
         return dataloader
 
@@ -110,7 +112,7 @@ def load_data(opt):
                                                      num_workers=int(opt.workers),
                                                      drop_last=drop_last_batch[x],
                                                      worker_init_fn=(None if opt.manualseed == -1
-                                                     else lambda x: np.random.seed(opt.manualseed)))
+                                                                     else lambda x: np.random.seed(opt.manualseed)))
                       for x in splits}
         return dataloader
 
@@ -150,7 +152,7 @@ def load_data(opt):
                                                      num_workers=int(opt.workers),
                                                      drop_last=drop_last_batch[x],
                                                      worker_init_fn=(None if opt.manualseed == -1
-                                                     else lambda x: np.random.seed(opt.manualseed)))
+                                                                     else lambda x: np.random.seed(opt.manualseed)))
                       for x in splits}
         return dataloader
 
@@ -170,9 +172,10 @@ def load_data(opt):
                                                      num_workers=int(opt.workers),
                                                      drop_last=drop_last_batch[x],
                                                      worker_init_fn=(None if opt.manualseed == -1
-                                                     else lambda x: np.random.seed(opt.manualseed)))
+                                                                     else lambda x: np.random.seed(opt.manualseed)))
                       for x in splits}
         return dataloader
+
 
 ##
 def get_cifar_anomaly_dataset(trn_img, trn_lbl, tst_img, tst_lbl, abn_cls_idx=0, manualseed=-1):
@@ -198,17 +201,17 @@ def get_cifar_anomaly_dataset(trn_img, trn_lbl, tst_img, tst_lbl, abn_cls_idx=0,
     # Find idx, img, lbl for abnormal and normal on org dataset.
     nrm_trn_idx = np.where(trn_lbl != abn_cls_idx)[0]
     abn_trn_idx = np.where(trn_lbl == abn_cls_idx)[0]
-    nrm_trn_img = trn_img[nrm_trn_idx]    # Normal training images
-    abn_trn_img = trn_img[abn_trn_idx]    # Abnormal training images
-    nrm_trn_lbl = trn_lbl[nrm_trn_idx]    # Normal training labels
-    abn_trn_lbl = trn_lbl[abn_trn_idx]    # Abnormal training labels.
+    nrm_trn_img = trn_img[nrm_trn_idx]  # Normal training images
+    abn_trn_img = trn_img[abn_trn_idx]  # Abnormal training images
+    nrm_trn_lbl = trn_lbl[nrm_trn_idx]  # Normal training labels
+    abn_trn_lbl = trn_lbl[abn_trn_idx]  # Abnormal training labels.
 
     nrm_tst_idx = np.where(tst_lbl != abn_cls_idx)[0]
     abn_tst_idx = np.where(tst_lbl == abn_cls_idx)[0]
-    nrm_tst_img = tst_img[nrm_tst_idx]    # Normal training images
-    abn_tst_img = tst_img[abn_tst_idx]    # Abnormal training images.
-    nrm_tst_lbl = tst_lbl[nrm_tst_idx]    # Normal training labels
-    abn_tst_lbl = tst_lbl[abn_tst_idx]    # Abnormal training labels.
+    nrm_tst_img = tst_img[nrm_tst_idx]  # Normal training images
+    abn_tst_img = tst_img[abn_tst_idx]  # Abnormal training images.
+    nrm_tst_lbl = tst_lbl[nrm_tst_idx]  # Normal training labels
+    abn_tst_lbl = tst_lbl[abn_tst_idx]  # Abnormal training labels.
 
     # --
     # Assign labels to normal (0) and abnormals (1)
@@ -254,6 +257,7 @@ def get_cifar_anomaly_dataset(trn_img, trn_lbl, tst_img, tst_lbl, abn_cls_idx=0,
 
     return new_trn_img, new_trn_lbl, new_tst_img, new_tst_lbl
 
+
 ##
 def get_mnist_anomaly_dataset(trn_img, trn_lbl, tst_img, tst_lbl, abn_cls_idx=0, manualseed=-1):
     """[summary]
@@ -279,17 +283,17 @@ def get_mnist_anomaly_dataset(trn_img, trn_lbl, tst_img, tst_lbl, abn_cls_idx=0,
 
     # --
     # Find normal and abnormal images
-    nrm_trn_img = trn_img[nrm_trn_idx]    # Normal training images
-    abn_trn_img = trn_img[abn_trn_idx]    # Abnormal training images.
-    nrm_tst_img = tst_img[nrm_tst_idx]    # Normal training images
-    abn_tst_img = tst_img[abn_tst_idx]    # Abnormal training images.
+    nrm_trn_img = trn_img[nrm_trn_idx]  # Normal training images
+    abn_trn_img = trn_img[abn_trn_idx]  # Abnormal training images.
+    nrm_tst_img = tst_img[nrm_tst_idx]  # Normal training images
+    abn_tst_img = tst_img[abn_tst_idx]  # Abnormal training images.
 
     # --
     # Find normal and abnormal labels.
-    nrm_trn_lbl = trn_lbl[nrm_trn_idx]    # Normal training labels
-    abn_trn_lbl = trn_lbl[abn_trn_idx]    # Abnormal training labels.
-    nrm_tst_lbl = tst_lbl[nrm_tst_idx]    # Normal training labels
-    abn_tst_lbl = tst_lbl[abn_tst_idx]    # Abnormal training labels.
+    nrm_trn_lbl = trn_lbl[nrm_trn_idx]  # Normal training labels
+    abn_trn_lbl = trn_lbl[abn_trn_idx]  # Abnormal training labels.
+    nrm_tst_lbl = tst_lbl[nrm_tst_idx]  # Normal training labels
+    abn_tst_lbl = tst_lbl[abn_tst_idx]  # Abnormal training labels.
 
     # --
     # Assign labels to normal (0) and abnormals (1)
@@ -329,6 +333,7 @@ def get_mnist_anomaly_dataset(trn_img, trn_lbl, tst_img, tst_lbl, abn_cls_idx=0,
 
     return new_trn_img, new_trn_lbl, new_tst_img, new_tst_lbl
 
+
 ##
 def get_mnist2_anomaly_dataset(trn_img, trn_lbl, tst_img, tst_lbl, nrm_cls_idx=0, proportion=0.5,
                                manualseed=-1):
@@ -362,20 +367,19 @@ def get_mnist2_anomaly_dataset(trn_img, trn_lbl, tst_img, tst_lbl, nrm_cls_idx=0
     abn_tst_idx = abn_tst_idx[torch.randperm(len(abn_tst_idx))]
     abn_tst_idx = abn_tst_idx[:int(len(abn_tst_idx) * proportion)]
 
-
     # --
     # Find normal and abnormal images
-    nrm_trn_img = trn_img[nrm_trn_idx]    # Normal training images
-    abn_trn_img = trn_img[abn_trn_idx]    # Abnormal training images.
-    nrm_tst_img = tst_img[nrm_tst_idx]    # Normal training images
-    abn_tst_img = tst_img[abn_tst_idx]    # Abnormal training images.
+    nrm_trn_img = trn_img[nrm_trn_idx]  # Normal training images
+    abn_trn_img = trn_img[abn_trn_idx]  # Abnormal training images.
+    nrm_tst_img = tst_img[nrm_tst_idx]  # Normal training images
+    abn_tst_img = tst_img[abn_tst_idx]  # Abnormal training images.
 
     # --
     # Find normal and abnormal labels.
-    nrm_trn_lbl = trn_lbl[nrm_trn_idx]    # Normal training labels
-    abn_trn_lbl = trn_lbl[abn_trn_idx]    # Abnormal training labels.
-    nrm_tst_lbl = tst_lbl[nrm_tst_idx]    # Normal training labels
-    abn_tst_lbl = tst_lbl[abn_tst_idx]    # Abnormal training labels.
+    nrm_trn_lbl = trn_lbl[nrm_trn_idx]  # Normal training labels
+    abn_trn_lbl = trn_lbl[abn_trn_idx]  # Abnormal training labels.
+    nrm_tst_lbl = tst_lbl[nrm_tst_idx]  # Normal training labels
+    abn_tst_lbl = tst_lbl[abn_tst_idx]  # Abnormal training labels.
 
     # --
     # Assign labels to normal (0) and abnormals (1)
@@ -391,3 +395,41 @@ def get_mnist2_anomaly_dataset(trn_img, trn_lbl, tst_img, tst_lbl, nrm_cls_idx=0
     new_tst_lbl = torch.cat((nrm_tst_lbl, abn_tst_lbl), dim=0)
 
     return new_trn_img, new_trn_lbl, new_tst_img, new_tst_lbl
+
+
+def set_dataset(opt, i_latent, o_latent, labels, proportion=0.8):
+    """
+
+    Args:
+        opt:
+        i_latent:
+        o_latent:
+        labels:
+        proportion:
+
+    Returns:
+
+    """
+    if proportion > 0 and proportion < 1:
+        prop = len(labels) // (1 / proportion)
+
+    splits = ['i_train', 'i_test', 'o_train', 'o_test']
+    drop_last_batch = {'i_train': True, 'i_test': False, 'o_train': True, 'o_test': False}
+    shuffle = {'i_train': True, 'i_test': True, 'o_train': True, 'o_test': True}
+
+    dataset = {'i_train': TensorDataset(i_latent[:prop], labels[:prop]),
+               'i_test': TensorDataset(i_latent[prop:], labels[prop:]),
+               'o_train': TensorDataset(o_latent[:prop], labels[:prop]),
+               'o_test': TensorDataset(o_latent[prop:], labels[prop:]),
+               }
+
+    dataloader = {x: torch.utils.data.DataLoader(dataset=dataset[x],
+                                                 batch_size=opt.batchsize,
+                                                 shuffle=shuffle[x],
+                                                 num_workers=int(opt.workers),
+                                                 drop_last=drop_last_batch[x],
+                                                 worker_init_fn=(None if opt.manualseed == -1
+                                                                 else lambda x: np.random.seed(opt.manualseed)),
+                                                 )
+                  for x in splits}
+    return dataloader
