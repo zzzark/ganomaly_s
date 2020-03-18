@@ -21,6 +21,8 @@ from lib.visualizer import Visualizer
 from lib.loss import l1_loss, l2_loss, l3_loss
 from lib.evaluate import evaluate
 
+from lib.data import set_dataset
+
 
 class BaseModel():
     """ Base Model for ganomaly
@@ -56,6 +58,19 @@ class BaseModel():
                 self.fixed_input.resize_(input[0].size()).copy_(input[0])
                 self.visualizer.save_fixed_real_s(self.fixed_input)
 
+    def z_set_input(self, i_input: torch.Tensor, o_input: torch.Tensor):
+        """Args:
+            i_input:
+            o_input:
+        """
+        with torch.no_grad():
+            self.i_input.resize_(i_input[0].size()).copy_(i_input[0])
+            self.o_input.resize_(o_input[0].size()).copy_(o_input[0])
+            self.i_gt.resize_(i_input[1].size()).copy_(i_input[1])
+            self.o_gt.resize_(o_input[1].size()).copy_(o_input[1])
+            self.i_label.resize_(i_input[1].size())
+            self.o_label.resize_(o_input[1].size())
+
     ##
     def seed(self, seed_value):
         """ Seed 
@@ -89,6 +104,20 @@ class BaseModel():
             ('err_g_adv', self.err_g_adv.item()),
             ('err_g_con', self.err_g_con.item()),
             ('err_g_enc', self.err_g_enc.item())])
+
+        return errors
+
+    ##
+    def z_get_errors(self):
+        """ Get netD and netG errors.
+
+        Returns:
+            [OrderedDict]: Dictionary containing errors.
+        """
+
+        errors = OrderedDict([
+            ('err_i', self.err_i.item()),
+            ('err_o', self.err_o.item())])
 
         return errors
 
@@ -310,8 +339,72 @@ class BaseModel():
             if self.opt.display_id > 0 and self.opt.phase == 'test':
                 counter_ratio = float(epoch_iter) / len(self.dataloader['test'].dataset)
                 self.visualizer.plot_performance(self.epoch, counter_ratio, performance)
-
+            if self.opt.classifier:
+                self.z_dataloader = set_dataset(self.opt, self.latent_i, self.latent_o, self.gt_labels)
             return performance
+
+    ##
+    def z_save_weights(self, epoch):
+        weight_dir = os.path.join(self.opt.outf, self.opt.name, 'train', 'weights')
+        if not os.path.exists(weight_dir): os.makedirs(weight_dir)
+
+        torch.save({'epoch': epoch + 1, 'state_dict': self.netc_i.state_dict()},
+                   '%s/netC_i.pth' % (weight_dir))
+        torch.save({'epoch': epoch + 1, 'state_dict': self.netc_o.state_dict()},
+                   '%s/netC_o.pth' % (weight_dir))
+
+    ##
+    def z_train(self):
+        """ Train the model
+        """
+
+        ##
+        # TRAIN
+        self.total_steps = 0
+        best_auc = 0
+
+        # Train for niter epochs.
+        print(">> Training model %s." % self.name)
+        for self.epoch in range(self.opt.iter, self.opt.niter):
+            # Train for one epoch
+            self.train_one_epoch()
+            res = self.z_test()
+            if res['AUC'] > best_auc:
+                best_auc = res['AUC']
+                self.z_save_weights(self.epoch)
+            self.visualizer.print_current_performance(res, best_auc)
+        print(">> Training model %s.[Done]" % self.name)
+
+    ##
+    def z_train_one_epoch(self):
+        """ Train the model for one epoch.
+        """
+
+        self.netc_i.train()
+        self.netc_o.train()
+        epoch_iter = 0
+        for i_data, o_data in tqdm(self.z_dataloader['io_train'], leave=False, total=len(self.dataloader['train'])):
+            self.total_steps += self.opt.batchsize
+            epoch_iter += self.opt.batchsize
+
+            self.set_input(i_data, o_data)
+            # self.optimize()
+            self.z_optimize_params()
+
+            if self.total_steps % self.opt.print_freq == 0:
+                errors = self.z_get_errors()
+                if self.opt.display:
+                    counter_ratio = float(epoch_iter) / len(self.z_dataloader['io_train'].dataset)
+                    self.visualizer.plot_current_errors(self.epoch, counter_ratio, errors)
+
+            # if self.total_steps % self.opt.save_image_freq == 0:
+            #     # point
+            #     reals, fakes, fixed, fixed_reals = self.get_current_images()
+            #     self.visualizer.save_current_images(self.epoch, reals, fakes, fixed)
+            #     if self.opt.display:
+            #         self.visualizer.display_current_images(reals, fakes, fixed, fixed_reals)
+
+        print(">> Training model %s. Epoch %d/%d" % (self.name, self.epoch + 1, self.opt.niter))
 
 
 ##
@@ -337,6 +430,10 @@ class Ganomaly(BaseModel):
         self.netd = NetD(self.opt).to(self.device)
         self.netg.apply(weights_init)
         self.netd.apply(weights_init)
+        self.netc_i = NetC(self.opt).to(self.device)
+        self.netc_o = NetC(self.opt).to(self.device)
+        self.netc_i.apply(weights_init)
+        self.netc_o.apply(weights_init)
 
         ##
         if self.opt.resume != '':
@@ -344,6 +441,12 @@ class Ganomaly(BaseModel):
             self.opt.iter = torch.load(os.path.join(self.opt.resume, 'netG.pth'))['epoch']
             self.netg.load_state_dict(torch.load(os.path.join(self.opt.resume, 'netG.pth'))['state_dict'])
             self.netd.load_state_dict(torch.load(os.path.join(self.opt.resume, 'netD.pth'))['state_dict'])
+            print("\tDone.\n")
+        if self.opt.z_resume != '':
+            print("\nLoading pre-trained z_networks.")
+            self.opt.iter = torch.load(os.path.join(self.opt.z_resume, 'netC_i.pth'))['epoch']
+            self.netc_i.load_state_dict(torch.load(os.path.join(self.opt.z_resume, 'netC_i.pth'))['state_dict'])
+            self.netc_o.load_state_dict(torch.load(os.path.join(self.opt.z_resume, 'netC_o.pth'))['state_dict'])
             print("\tDone.\n")
 
         self.l_adv = l2_loss
@@ -368,6 +471,10 @@ class Ganomaly(BaseModel):
             self.netd.train()
             self.optimizer_d = optim.Adam(self.netd.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
             self.optimizer_g = optim.Adam(self.netg.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
+            self.netc_i.train()
+            self.netc_o.train()
+            self.optimizer_i = optim.Adam(self.netc_i.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
+            self.optimizer_o = optim.Adam(self.netc_o.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
 
     ##
     def forward_g(self):
@@ -432,29 +539,7 @@ class Ganomaly(BaseModel):
         self.optimizer_d.step()
         if self.err_d.item() < 1e-5: self.reinit_d()
 
-
-class Classifier(Ganomaly):
-    """Classifier Class
-    """
-
-    @property
-    def name(self):
-        return 'Classifier'
-
-    def __init__(self, opt, dataloader):
-        super(Ganomaly, self).__init__(opt, dataloader)
-
-        self.netc_i = NetC(self.opt).to(self.device)
-        self.netc_o = NetC(self.opt).to(self.device)
-        self.netc_i.apply(weights_init)
-        self.netc_o.apply(weights_init)
-
-        if self.opt.isTrain:
-            self.netc_i.train()
-            self.netc_o.train()
-            self.optimizer_i = optim.Adam(self.netc_i.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
-            self.optimizer_o = optim.Adam(self.netc_o.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
-
+    ##
     def save_weights_z(self, epoch):
         """Save netG and netD weights for the current epoch.
 
@@ -473,12 +558,12 @@ class Classifier(Ganomaly):
     def forward_i(self):
         """ Forward propagate through netC_i
         """
-        self.pred_abn_i = self.netc_i(self.input)
+        self.pred_abn_i = self.netc_i(self.i_input)
 
     def forward_o(self):
         """ Forward propagate through netC_o
         """
-        self.pred_abn_o = self.netc_o(self.input)
+        self.pred_abn_o = self.netc_o(self.o_input)
 
     def backward_i(self):
         """ Backpropagate through netC_i
@@ -510,7 +595,7 @@ class Classifier(Ganomaly):
         self.netc_o.apply(weights_init)
         if (self.opt.strengthen != 1): print('   Reloading net o')
 
-    def optimize_params(self):
+    def z_optimize_params(self):
         """ Forwardpass, Loss Computation and Backwardpass.
         """
         # Forward-pass
@@ -530,3 +615,135 @@ class Classifier(Ganomaly):
         if self.err_i.item() < 1e-5: self.reinit_i()
         if self.err_i.item() < 1e-5: self.reinit_o()
 
+#
+# class Classifier(Ganomaly):
+#     """Classifier Class
+#     """
+#
+#
+#     @property
+#     def name(self):
+#         return 'Classifier'
+#
+#     def __init__(self, opt, dataloader):
+#         super(Ganomaly, self).__init__(opt, dataloader)
+#
+#         self.z_dataloader = dataloader
+#
+#         self.netc_i = NetC(self.opt).to(self.device)
+#         self.netc_o = NetC(self.opt).to(self.device)
+#         self.netc_i.apply(weights_init)
+#         self.netc_o.apply(weights_init)
+#
+#         if self.opt.isTrain:
+#             self.netc_i.train()
+#             self.netc_o.train()
+#             self.optimizer_i = optim.Adam(self.netc_i.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
+#             self.optimizer_o = optim.Adam(self.netc_o.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
+#
+#     def save_weights_z(self, epoch):
+#         """Save netG and netD weights for the current epoch.
+#
+#         Args:
+#             epoch ([int]): Current epoch number.
+#         """
+#
+#         weight_dir = os.path.join(self.opt.outf, self.opt.name, 'train', 'weights')
+#         if not os.path.exists(weight_dir): os.makedirs(weight_dir)
+#
+#         torch.save({'epoch': epoch + 1, 'state_dict': self.netC_i.state_dict()},
+#                    '%s/netC_i.pth' % (weight_dir))
+#         torch.save({'epoch': epoch + 1, 'state_dict': self.netC_o.state_dict()},
+#                    '%s/netC_o.pth' % (weight_dir))
+#
+#     def forward_i(self):
+#         """ Forward propagate through netC_i
+#         """
+#         self.pred_abn_i = self.netc_i(self.input)
+#
+#     def forward_o(self):
+#         """ Forward propagate through netC_o
+#         """
+#         self.pred_abn_o = self.netc_o(self.input)
+#
+#     def backward_i(self):
+#         """ Backpropagate through netC_i
+#         """
+#         # Real - Fake Loss
+#         self.err_i = self.l_bce(self.pred_abn_i, self.real_label)
+#
+#         # NetD Loss & Backward-Pass
+#         self.err_i.backward()
+#
+#     def backward_o(self):
+#         """ Backpropagate through netC_o
+#         """
+#         # Real - Fake Loss
+#         self.err_o = self.l_bce(self.pred_abn_o, self.real_label)
+#
+#         # NetD Loss & Backward-Pass
+#         self.err_o.backward()
+#
+#     def reinit_i(self):
+#         """ Re-initialize the weights of netC_i
+#         """
+#         self.netc_i.apply(weights_init)
+#         if (self.opt.strengthen != 1): print('   Reloading net i')
+#
+#     def reinit_o(self):
+#         """ Re-initialize the weights of netC_o
+#         """
+#         self.netc_o.apply(weights_init)
+#         if (self.opt.strengthen != 1): print('   Reloading net o')
+#
+#     def optimize_params(self):
+#         """ Forwardpass, Loss Computation and Backwardpass.
+#         """
+#         # Forward-pass
+#         self.forward_i()
+#         self.forward_o()
+#
+#         # Backward-pass
+#         # netc_i
+#         self.optimizer_i.zero_grad()
+#         self.backward_i()
+#         self.optimizer_i.step()
+#
+#         # netc_o
+#         self.optimizer_o.zero_grad()
+#         self.backward_o()
+#         self.optimizer_o.step()
+#         if self.err_i.item() < 1e-5: self.reinit_i()
+#         if self.err_i.item() < 1e-5: self.reinit_o()
+#
+# ##
+#     def z_train_one_epoch(self):
+#         """ Train the model for one epoch.
+#         """
+#
+#         self.netc_i.train()
+#         self.netc_o.train()
+#         epoch_iter = 0
+#         for data in tqdm(self.dataloader['train'], leave=False, total=len(self.dataloader['train'])):
+#             self.total_steps += self.opt.batchsize
+#             epoch_iter += self.opt.batchsize
+#
+#             self.set_input(data)
+#             # self.optimize()
+#             self.optimize_params()
+#
+#             if self.total_steps % self.opt.print_freq == 0:
+#                 errors = self.get_errors()
+#                 if self.opt.display:
+#                     counter_ratio = float(epoch_iter) / len(self.dataloader['train'].dataset)
+#                     self.visualizer.plot_current_errors(self.epoch, counter_ratio, errors)
+#
+#             if self.total_steps % self.opt.save_image_freq == 0:
+#                 # point
+#                 reals, fakes, fixed, fixed_reals = self.get_current_images()
+#                 self.visualizer.save_current_images(self.epoch, reals, fakes, fixed)
+#                 if self.opt.display:
+#                     self.visualizer.display_current_images(reals, fakes, fixed, fixed_reals)
+#
+#         print(">> Training model %s. Epoch %d/%d" % (self.name, self.epoch + 1, self.opt.niter))
+#         # self.visualizer.print_current_errors(self.epoch, errors)

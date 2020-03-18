@@ -411,19 +411,19 @@ def set_dataset(opt, i_latent, o_latent, labels, proportion=0.8):
 
     """
     if proportion > 0 and proportion < 1:
-        prop = len(labels) // (1 / proportion)
+        prop = int(len(labels) // (1 / proportion))
 
-    splits = ['i_train', 'i_test', 'o_train', 'o_test']
-    drop_last_batch = {'i_train': True, 'i_test': False, 'o_train': True, 'o_test': False}
-    shuffle = {'i_train': True, 'i_test': True, 'o_train': True, 'o_test': True}
+    splits = ['io_train', 'io_test']
+    drop_last_batch = {'io_train': True, 'io_test': False}
+    shuffle = {'io_train': True, 'io_test': True}
 
-    dataset = {'i_train': TensorDataset(i_latent[:prop], labels[:prop]),
-               'i_test': TensorDataset(i_latent[prop:], labels[prop:]),
-               'o_train': TensorDataset(o_latent[:prop], labels[:prop]),
-               'o_test': TensorDataset(o_latent[prop:], labels[prop:]),
+    dataset = {'io_train': (TensorDataset(i_latent[:prop], labels[:prop]),
+               TensorDataset(o_latent[:prop], labels[:prop])),
+               'io_test': (TensorDataset(i_latent[prop:], labels[prop:]),
+                TensorDataset(o_latent[prop:], labels[prop:])),
                }
 
-    dataloader = {x: torch.utils.data.DataLoader(dataset=dataset[x],
+    dataloader = {x: torch.utils.data.DataLoader(dataset=dataset[x][i],
                                                  batch_size=opt.batchsize,
                                                  shuffle=shuffle[x],
                                                  num_workers=int(opt.workers),
@@ -431,5 +431,5 @@ def set_dataset(opt, i_latent, o_latent, labels, proportion=0.8):
                                                  worker_init_fn=(None if opt.manualseed == -1
                                                                  else lambda x: np.random.seed(opt.manualseed)),
                                                  )
-                  for x in splits}
+                  for x in splits for i in range(2)}
     return dataloader
