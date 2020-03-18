@@ -55,6 +55,8 @@ class Options():
         #strengthen
         self.parser.add_argument('--strengthen', type=int, default=0, help='Use strengthen tools.')
         self.parser.add_argument('--tSNE', action='store_true', help='display t-SNE images, it will influent cpu')
+        self.parser.add_argument('--classifier', action='store_true', help='Use classifier to classify dataset[test]')
+        self.parser.add_argument('--z_resume', default='', help="path to checkpoints (to continue training)")
         ##
         # Train
         self.parser.add_argument('--print_freq', type=int, default=100, help='frequency of showing training results on console')

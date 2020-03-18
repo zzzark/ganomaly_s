@@ -189,7 +189,7 @@ class NetC(nn.Module):
 
     def __init__(self, opt):
         super(NetC, self).__init__()
-        model = Encoder(opt.nz * 0.5, 1, opt.nc, opt.ngf, opt.ngpu, opt.extralayers)
+        model = Encoder(opt.nz ** 0.5, 1, opt.nc, opt.ngf, opt.ngpu, opt.extralayers)
         layers = list(model.main.children())
 
         self.features_io = nn.Sequential(*layers[:-1])
@@ -200,6 +200,6 @@ class NetC(nn.Module):
         features_io = self.features_io(z)
         features_io = features_io
         classifier_io = self.classifier_i(features_io)
-        classifier_io = classifier_io.add_module('Sigmoid', nn.Sigmoid())
+        classifier_io = classifier_io.view(-1, 1).squeeze(1)
 
         return classifier_io, features_io
