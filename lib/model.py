@@ -40,6 +40,7 @@ class BaseModel():
         self.trn_dir = os.path.join(self.opt.outf, self.opt.name, 'train')
         self.tst_dir = os.path.join(self.opt.outf, self.opt.name, 'test')
         self.device = torch.device("cuda:0" if self.opt.device != 'cpu' else "cpu")
+        self.sqrtnz = int(self.opt.nz ** 0.5)
 
     ##
     def set_input(self, input: torch.Tensor):
@@ -58,18 +59,17 @@ class BaseModel():
                 self.fixed_input.resize_(input[0].size()).copy_(input[0])
                 self.visualizer.save_fixed_real_s(self.fixed_input)
 
-    def z_set_input(self, i_input: torch.Tensor, o_input: torch.Tensor):
-        """Args:
-            i_input:
-            o_input:
-        """
+    def z_set_input(self, net, input: torch.Tensor):
+
         with torch.no_grad():
-            self.i_input.resize_(i_input[0].size()).copy_(i_input[0])
-            self.o_input.resize_(o_input[0].size()).copy_(o_input[0])
-            self.i_gt.resize_(i_input[1].size()).copy_(i_input[1])
-            self.o_gt.resize_(o_input[1].size()).copy_(o_input[1])
-            self.i_label.resize_(i_input[1].size())
-            self.o_label.resize_(o_input[1].size())
+            if net == 'i':
+                self.i_input.resize_(input[0].size()).copy_(input[0])
+                self.i_gt.resize_(input[1].size()).copy_(input[1])
+                self.i_label.resize_(input[1].size())
+            if net == 'o':
+                self.o_input.resize_(input[0].size()).copy_(input[0])
+                self.o_gt.resize_(input[1].size()).copy_(input[1])
+                self.o_label.resize_(input[1].size())
 
     ##
     def seed(self, seed_value):
@@ -108,16 +108,18 @@ class BaseModel():
         return errors
 
     ##
-    def z_get_errors(self):
+    def z_get_errors(self, net):
         """ Get netD and netG errors.
 
         Returns:
             [OrderedDict]: Dictionary containing errors.
         """
-
-        errors = OrderedDict([
-            ('err_i', self.err_i.item()),
-            ('err_o', self.err_o.item())])
+        if net == 'i':
+            errors = OrderedDict([
+                ('err_i', self.err_i.item())])
+        if net == 'o':
+            errors = OrderedDict([
+                ('err_o', self.err_o.item())])
 
         return errors
 
@@ -364,10 +366,10 @@ class BaseModel():
         best_auc = 0
 
         # Train for niter epochs.
-        print(">> Training model %s." % self.name)
+        print(">> Training model classifier")
         for self.epoch in range(self.opt.iter, self.opt.niter):
             # Train for one epoch
-            self.train_one_epoch()
+            self.z_train_one_epoch()
             res = self.z_test()
             if res['AUC'] > best_auc:
                 best_auc = res['AUC']
@@ -383,18 +385,18 @@ class BaseModel():
         self.netc_i.train()
         self.netc_o.train()
         epoch_iter = 0
-        for i_data, o_data in tqdm(self.z_dataloader['io_train'], leave=False, total=len(self.dataloader['train'])):
+        for i_data in tqdm(self.z_dataloader['i_train'], leave=False, total=len(self.dataloader['train'])):
             self.total_steps += self.opt.batchsize
             epoch_iter += self.opt.batchsize
 
-            self.set_input(i_data, o_data)
+            self.z_set_input('i', i_data)
             # self.optimize()
-            self.z_optimize_params()
+            self.z_optimize_params('i')
 
             if self.total_steps % self.opt.print_freq == 0:
-                errors = self.z_get_errors()
+                errors = self.z_get_errors('i')
                 if self.opt.display:
-                    counter_ratio = float(epoch_iter) / len(self.z_dataloader['io_train'].dataset)
+                    counter_ratio = float(epoch_iter) / len(self.z_dataloader['i_train'].dataset)
                     self.visualizer.plot_current_errors(self.epoch, counter_ratio, errors)
 
             # if self.total_steps % self.opt.save_image_freq == 0:
@@ -405,6 +407,153 @@ class BaseModel():
             #         self.visualizer.display_current_images(reals, fakes, fixed, fixed_reals)
 
         print(">> Training model %s. Epoch %d/%d" % (self.name, self.epoch + 1, self.opt.niter))
+
+    ##
+    def z_test(self):
+        """ Test GANomaly model.
+
+        Args:
+            dataloader ([type]): Dataloader for the test set
+
+        Raises:
+            IOError: Model weights not found.
+        """
+
+        self.netd.eval()
+        self.netc_i.eval()
+        self.netc_o.eval()
+        with torch.no_grad():
+
+            # Load the weights of netg and netd.
+            if self.opt.z_load_weights:
+                d_path = "./output/{}/{}/train/weights/netD.pth".format(self.name.lower(), self.opt.dataset)
+                i_path = "./output/{}/{}/train/weights/netC_i.pth".format(self.name.lower(), self.opt.dataset)
+                o_path = "./output/{}/{}/train/weights/netC_o.pth".format(self.name.lower(), self.opt.dataset)
+                d_pretrained_dict = torch.load(d_path)['state_dict']
+                i_pretrained_dict = torch.load(i_path)['state_dict']
+                o_pretrained_dict = torch.load(o_path)['state_dict']
+
+                try:
+                    self.netd.load_state_dict(d_pretrained_dict)
+                    self.netc_i.load_state_dict(i_pretrained_dict)
+                    self.netc_o.load_state_dict(o_pretrained_dict)
+                except IOError:
+                    raise IOError("net weights not found")
+                print('   Loaded weights.')
+
+            self.opt.phase = 'test'
+
+            # Create big error tensor for the test set.
+            self.i_scores = torch.zeros(size=(len(self.z_dataloader['i_test'].dataset),), dtype=torch.float32,
+                                         device=self.device)
+            self.gt_labels = torch.zeros(size=(len(self.z_dataloader['i_test'].dataset),), dtype=torch.long,
+                                         device=self.device)
+            self.latent_i = torch.zeros(size=(len(self.z_dataloader['i_test'].dataset), self.opt.nz),
+                                        dtype=torch.float32,
+                                        device=self.device)
+            self.latent_o = torch.zeros(size=(len(self.z_dataloader['i_test'].dataset), self.opt.nz),
+                                        dtype=torch.float32,
+                                        device=self.device)
+            self.last_feature = torch.zeros(size=(
+                len(self.dataloader['test'].dataset),
+                list(self.netd.children())[0][-3].out_channels,
+                list(self.netd.children())[0][-3].kernel_size[0],
+                list(self.netd.children())[0][-3].kernel_size[1]
+            ), dtype=torch.float32, device=self.device)
+
+            self.times = []
+            self.total_steps = 0
+            epoch_iter = 0
+            for i, i_data in enumerate(self.z_dataloader['i_test'], 0):
+                self.total_steps += self.opt.batchsize
+                epoch_iter += self.opt.batchsize
+                time_i = time.time()
+                self.z_set_input('i', i_data)
+                i_class = self.netc_i(self.i_input)
+                o_class = self.netc_o(self.o_input)
+                print("classifier of netc:", i_class, " ", o_class)
+                self.fake, latent_i, latent_o = self.netg(self.input)
+                _, features = self.netd(self.input)
+
+                error = torch.mean(torch.pow((latent_i - latent_o), 2), dim=1)
+                time_o = time.time()
+
+                self.an_scores[i * self.opt.batchsize: i * self.opt.batchsize + error.size(0)] = error.reshape(
+                    error.size(0))
+                self.gt_labels[i * self.opt.batchsize: i * self.opt.batchsize + error.size(0)] = self.gt.reshape(
+                    error.size(0))
+                self.latent_i[i * self.opt.batchsize: i * self.opt.batchsize + error.size(0), :] = latent_i.reshape(
+                    error.size(0), self.opt.nz)
+                self.latent_o[i * self.opt.batchsize: i * self.opt.batchsize + error.size(0), :] = latent_o.reshape(
+                    error.size(0), self.opt.nz)
+                self.last_feature[i * self.opt.batchsize: i * self.opt.batchsize + error.size(0), :] = features.reshape(
+                    error.size(0),
+                    list(self.netd.children())[0][-3].out_channels,
+                    list(self.netd.children())[0][-3].kernel_size[0],
+                    list(self.netd.children())[0][-3].kernel_size[1])
+
+                self.times.append(time_o - time_i)
+
+                # Save test images.
+                if self.opt.save_test_images:
+                    dst = os.path.join(self.opt.outf, self.opt.name, 'test', 'images')
+                    if not os.path.isdir(dst):
+                        os.makedirs(dst)
+                    real, fake, _, _ = self.get_current_images()  # point add attribute fixed_real
+                    vutils.save_image(real, '%s/real_%03d.eps' % (dst, i + 1), normalize=True)
+                    vutils.save_image(fake, '%s/fake_%03d.eps' % (dst, i + 1), normalize=True)
+            """
+            data=[]
+            feature = self.last_feature.cpu().numpy().reshape(self.last_feature.size()[0], -1)
+            label = self.gt_labels.cpu().numpy().reshape(self.last_feature.size()[0], -1)
+
+            features_dir = './features'
+            file_name = 'features_map.csv'
+            feature_path = os.path.join(features_dir, file_name + '.txt')
+            import pandas as pd
+            feature.tolist()
+            label.tolist()
+            test = pd.DataFrame(data=feature)
+            test.to_csv("./1.csv", mode='a+', index=None, header=None)
+            test = pd.DataFrame(data=label)
+            test.to_csv("./2.csv", mode='a+', index=None, header=None)
+            print('END')"""
+
+            # Measure inference time.
+            self.times = np.array(self.times)
+            self.times = np.mean(self.times[:100] * 1000)
+
+            # Scale error vector between [0, 1]
+            self.an_scores = (self.an_scores - torch.min(self.an_scores)) / (
+                    torch.max(self.an_scores) - torch.min(self.an_scores))
+
+            # auc, eer = roc(self.gt_labels, self.an_scores)
+            auc = evaluate(self.gt_labels, self.an_scores, metric=self.opt.metric)
+            performance = OrderedDict([('Avg Run Time (ms/batch)', self.times), ('AUC', auc)])
+
+            if self.opt.strengthen and self.opt.phase == 'test':
+                # self.visualizer.display_scores_histo(self.epoch, self.an_scores, self.gt_labels)
+                # self.visualizer.display_feature(self.last_feature, self.gt_labels)
+                t0 = threading.Thread(target=self.visualizer.display_scores_histo,
+                                      name='histogram ',
+                                      args=(self.epoch, self.an_scores, self.gt_labels))
+                t0.start()
+                if self.opt.strengthen > 1:
+                    t1 = threading.Thread(target=self.visualizer.display_feature,
+                                          name='t-SNE visualizer',
+                                          args=(self.last_feature, self.gt_labels))
+                    t2 = threading.Thread(target=self.visualizer.display_latent,
+                                          name='latent LDA visualizer',
+                                          args=(self.latent_i, self.latent_o, self.gt_labels, 9, 1000, True))
+                    t1.start()
+                    t2.start()
+
+            if self.opt.display_id > 0 and self.opt.phase == 'test':
+                counter_ratio = float(epoch_iter) / len(self.dataloader['test'].dataset)
+                self.visualizer.plot_performance(self.epoch, counter_ratio, performance)
+            if self.opt.classifier:
+                self.z_dataloader = set_dataset(self.opt, self.latent_i, self.latent_o, self.gt_labels)
+            return performance
 
 
 ##
@@ -464,6 +613,16 @@ class Ganomaly(BaseModel):
                                        dtype=torch.float32, device=self.device)
         self.real_label = torch.ones(size=(self.opt.batchsize,), dtype=torch.float32, device=self.device)
         self.fake_label = torch.zeros(size=(self.opt.batchsize,), dtype=torch.float32, device=self.device)
+        ##
+        # Initialize input tensors for classifier
+        self.i_input = torch.empty(size=(self.opt.batchsize, 1, self.sqrtnz, self.sqrtnz), dtype=torch.float32,
+                                 device=self.device)
+        self.o_input = torch.empty(size=(self.opt.batchsize, 1, int(self.opt.nz ** 0.5), int(self.opt.nz ** 0.5)),
+                                   dtype=torch.float32,
+                                   device=self.device)
+        self.i_gt = torch.empty(size=(opt.batchsize,), dtype=torch.long, device=self.device)
+        self.i_label = torch.empty(size=(self.opt.batchsize,), dtype=torch.float32, device=self.device)
+
         ##
         # Setup optimizer
         if self.opt.isTrain:
@@ -595,25 +754,32 @@ class Ganomaly(BaseModel):
         self.netc_o.apply(weights_init)
         if (self.opt.strengthen != 1): print('   Reloading net o')
 
-    def z_optimize_params(self):
+    def z_optimize_params(self, net):
         """ Forwardpass, Loss Computation and Backwardpass.
         """
-        # Forward-pass
-        self.forward_i()
-        self.forward_o()
+        if net == 'i':
+            # Forward-pass
+            self.forward_i()
 
-        # Backward-pass
-        # netc_i
-        self.optimizer_i.zero_grad()
-        self.backward_i()
-        self.optimizer_i.step()
+            # Backward-pass
+            # netc_i
+            self.optimizer_i.zero_grad()
+            self.backward_i()
+            self.optimizer_i.step()
 
-        # netc_o
-        self.optimizer_o.zero_grad()
-        self.backward_o()
-        self.optimizer_o.step()
-        if self.err_i.item() < 1e-5: self.reinit_i()
-        if self.err_i.item() < 1e-5: self.reinit_o()
+            if self.err_i.item() < 1e-5: self.reinit_i()
+        if net == 'o':
+            # Forward-pass
+            self.forward_o()
+
+            # Backward-pass
+            # netc_o
+            self.optimizer_o.zero_grad()
+            self.backward_o()
+            self.optimizer_o.step()
+
+            if self.err_i.item() < 1e-5: self.reinit_o()
+
 
 #
 # class Classifier(Ganomaly):

@@ -57,6 +57,7 @@ class Options():
         self.parser.add_argument('--tSNE', action='store_true', help='display t-SNE images, it will influent cpu')
         self.parser.add_argument('--classifier', action='store_true', help='Use classifier to classify dataset[test]')
         self.parser.add_argument('--z_resume', default='', help="path to checkpoints (to continue training)")
+        self.parser.add_argument('--z_load_weights', default='', help="path to checkpoints (to continue training)")
         ##
         # Train
         self.parser.add_argument('--print_freq', type=int, default=100, help='frequency of showing training results on console')
@@ -74,6 +75,7 @@ class Options():
         self.parser.add_argument('--w_enc', type=float, default=1, help='Encoder loss weight.')
         self.isTrain = True
         self.opt = None
+
 
     def parse(self):
         """ Parse Arguments.
