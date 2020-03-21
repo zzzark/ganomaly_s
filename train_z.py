@@ -26,8 +26,15 @@ def train():
     # LOAD MODEL
     model = Ganomaly(opt, dataloader)
     ##
-    # TRAIN MODEL
-    model.train()
+    # MODEL TEST
+    res = model.test()
+
+    model.z_train()
+
+
+
+
+    print('AUC:%f\n' % res['AUC'])
 
 
 if __name__ == '__main__':

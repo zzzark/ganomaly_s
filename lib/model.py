@@ -322,8 +322,6 @@ class BaseModel():
             performance = OrderedDict([('Avg Run Time (ms/batch)', self.times), ('AUC', auc)])
 
             if self.opt.strengthen and self.opt.phase == 'test':
-                # self.visualizer.display_scores_histo(self.epoch, self.an_scores, self.gt_labels)
-                # self.visualizer.display_feature(self.last_feature, self.gt_labels)
                 t0 = threading.Thread(target=self.visualizer.display_scores_histo,
                                       name='histogram ',
                                       args=(self.epoch, self.an_scores, self.gt_labels))
@@ -385,13 +383,21 @@ class BaseModel():
         self.netc_i.train()
         self.netc_o.train()
         epoch_iter = 0
-        for i_data in tqdm(self.z_dataloader['i_train'], leave=False, total=len(self.dataloader['train'])):
+        for data in tqdm(self.z_dataloader['i_train'], leave=False, total=len(self.z_dataloader['i_train'])):
             self.total_steps += self.opt.batchsize
             epoch_iter += self.opt.batchsize
 
-            self.z_set_input('i', i_data)
+            self.z_set_input('i', data)
             # self.optimize()
             self.z_optimize_params('i')
+
+        for data in tqdm(self.z_dataloader['o_train'], leave=False, total=len(self.z_dataloader['o_train'])):
+            self.total_steps += self.opt.batchsize
+            epoch_iter += self.opt.batchsize
+
+            self.z_set_input('o', data)
+            # self.optimize()
+            self.z_optimize_params('o')
 
             if self.total_steps % self.opt.print_freq == 0:
                 errors = self.z_get_errors('i')
@@ -444,64 +450,61 @@ class BaseModel():
             self.opt.phase = 'test'
 
             # Create big error tensor for the test set.
-            self.i_scores = torch.zeros(size=(len(self.z_dataloader['i_test'].dataset),), dtype=torch.float32,
-                                         device=self.device)
-            self.gt_labels = torch.zeros(size=(len(self.z_dataloader['i_test'].dataset),), dtype=torch.long,
-                                         device=self.device)
-            self.latent_i = torch.zeros(size=(len(self.z_dataloader['i_test'].dataset), self.opt.nz),
-                                        dtype=torch.float32,
-                                        device=self.device)
-            self.latent_o = torch.zeros(size=(len(self.z_dataloader['i_test'].dataset), self.opt.nz),
-                                        dtype=torch.float32,
-                                        device=self.device)
-            self.last_feature = torch.zeros(size=(
-                len(self.dataloader['test'].dataset),
-                list(self.netd.children())[0][-3].out_channels,
-                list(self.netd.children())[0][-3].kernel_size[0],
-                list(self.netd.children())[0][-3].kernel_size[1]
-            ), dtype=torch.float32, device=self.device)
+            self.i_pred = torch.zeros(size=(len(self.z_dataloader['i_test'].dataset),), dtype=torch.float32,
+                                      device=self.device)
+            self.o_pred = torch.zeros(size=(len(self.z_dataloader['o_test'].dataset),), dtype=torch.float32,
+                                      device=self.device)
+            self.i_gt_labels = torch.zeros(size=(len(self.z_dataloader['i_test'].dataset),), dtype=torch.long,
+                                           device=self.device)
+            self.o_gt_labels = torch.zeros(size=(len(self.z_dataloader['o_test'].dataset),), dtype=torch.long,
+                                           device=self.device)
 
             self.times = []
             self.total_steps = 0
             epoch_iter = 0
-            for i, i_data in enumerate(self.z_dataloader['i_test'], 0):
+            for i, data in enumerate(self.z_dataloader['i_test'], 0):
                 self.total_steps += self.opt.batchsize
                 epoch_iter += self.opt.batchsize
                 time_i = time.time()
-                self.z_set_input('i', i_data)
-                i_class = self.netc_i(self.i_input)
-                o_class = self.netc_o(self.o_input)
-                print("classifier of netc:", i_class, " ", o_class)
-                self.fake, latent_i, latent_o = self.netg(self.input)
-                _, features = self.netd(self.input)
+                self.z_set_input('i', data)
+                i_pred = self.netc_i(self.i_input)
 
-                error = torch.mean(torch.pow((latent_i - latent_o), 2), dim=1)
                 time_o = time.time()
 
-                self.an_scores[i * self.opt.batchsize: i * self.opt.batchsize + error.size(0)] = error.reshape(
-                    error.size(0))
-                self.gt_labels[i * self.opt.batchsize: i * self.opt.batchsize + error.size(0)] = self.gt.reshape(
-                    error.size(0))
-                self.latent_i[i * self.opt.batchsize: i * self.opt.batchsize + error.size(0), :] = latent_i.reshape(
-                    error.size(0), self.opt.nz)
-                self.latent_o[i * self.opt.batchsize: i * self.opt.batchsize + error.size(0), :] = latent_o.reshape(
-                    error.size(0), self.opt.nz)
-                self.last_feature[i * self.opt.batchsize: i * self.opt.batchsize + error.size(0), :] = features.reshape(
-                    error.size(0),
-                    list(self.netd.children())[0][-3].out_channels,
-                    list(self.netd.children())[0][-3].kernel_size[0],
-                    list(self.netd.children())[0][-3].kernel_size[1])
+                # self.an_scores[i * self.opt.batchsize: i * self.opt.batchsize + error.size(0)] = error.reshape(
+                #     error.size(0))
+                # self.gt_labels[i * self.opt.batchsize: i * self.opt.batchsize + error.size(0)] = self.gt.reshape(
+                #     error.size(0))
+                self.i_pred[i * self.opt.batchsize: i * self.opt.batchsize + i_pred.size(0)] = i_pred.reshape(
+                    i_pred.size(0))
+                self.i_gt_labels[i * self.opt.batchsize: i * self.opt.batchsize + i_pred.size(0)] = self.i_gt.reshape(
+                    self.i_gt.size(0))
+
+                self.times.append(time_o - time_i)
+
+            for i, data in enumerate(self.z_dataloader['o_test'], 0):
+                self.total_steps += self.opt.batchsize
+                epoch_iter += self.opt.batchsize
+                time_i = time.time()
+                self.z_set_input('o', data)
+                o_pred = self.netc_o(self.o_input)
+
+                time_o = time.time()
+
+                self.o_pred[i * self.opt.batchsize: i * self.opt.batchsize + o_pred.size(0)] = o_pred.reshape(
+                    o_pred.size(0))
+                self.o_gt_labels[i * self.opt.batchsize: i * self.opt.batchsize + o_pred.size(0)] = self.o_gt.reshape(
+                    self.o_gt.size(0))
 
                 self.times.append(time_o - time_i)
 
                 # Save test images.
-                if self.opt.save_test_images:
-                    dst = os.path.join(self.opt.outf, self.opt.name, 'test', 'images')
-                    if not os.path.isdir(dst):
-                        os.makedirs(dst)
-                    real, fake, _, _ = self.get_current_images()  # point add attribute fixed_real
-                    vutils.save_image(real, '%s/real_%03d.eps' % (dst, i + 1), normalize=True)
-                    vutils.save_image(fake, '%s/fake_%03d.eps' % (dst, i + 1), normalize=True)
+            print('test:')
+            n=5
+            print(self.i_pred[:n])
+            print(self.i_gt_labels[:n])
+            print(self.o_pred[:n])
+            print(self.o_gt_labels[:n])
             """
             data=[]
             feature = self.last_feature.cpu().numpy().reshape(self.last_feature.size()[0], -1)
@@ -523,30 +526,9 @@ class BaseModel():
             self.times = np.array(self.times)
             self.times = np.mean(self.times[:100] * 1000)
 
-            # Scale error vector between [0, 1]
-            self.an_scores = (self.an_scores - torch.min(self.an_scores)) / (
-                    torch.max(self.an_scores) - torch.min(self.an_scores))
-
             # auc, eer = roc(self.gt_labels, self.an_scores)
             auc = evaluate(self.gt_labels, self.an_scores, metric=self.opt.metric)
             performance = OrderedDict([('Avg Run Time (ms/batch)', self.times), ('AUC', auc)])
-
-            if self.opt.strengthen and self.opt.phase == 'test':
-                # self.visualizer.display_scores_histo(self.epoch, self.an_scores, self.gt_labels)
-                # self.visualizer.display_feature(self.last_feature, self.gt_labels)
-                t0 = threading.Thread(target=self.visualizer.display_scores_histo,
-                                      name='histogram ',
-                                      args=(self.epoch, self.an_scores, self.gt_labels))
-                t0.start()
-                if self.opt.strengthen > 1:
-                    t1 = threading.Thread(target=self.visualizer.display_feature,
-                                          name='t-SNE visualizer',
-                                          args=(self.last_feature, self.gt_labels))
-                    t2 = threading.Thread(target=self.visualizer.display_latent,
-                                          name='latent LDA visualizer',
-                                          args=(self.latent_i, self.latent_o, self.gt_labels, 9, 1000, True))
-                    t1.start()
-                    t2.start()
 
             if self.opt.display_id > 0 and self.opt.phase == 'test':
                 counter_ratio = float(epoch_iter) / len(self.dataloader['test'].dataset)
@@ -616,12 +598,14 @@ class Ganomaly(BaseModel):
         ##
         # Initialize input tensors for classifier
         self.i_input = torch.empty(size=(self.opt.batchsize, 1, self.sqrtnz, self.sqrtnz), dtype=torch.float32,
-                                 device=self.device)
+                                   device=self.device)
         self.o_input = torch.empty(size=(self.opt.batchsize, 1, int(self.opt.nz ** 0.5), int(self.opt.nz ** 0.5)),
                                    dtype=torch.float32,
                                    device=self.device)
         self.i_gt = torch.empty(size=(opt.batchsize,), dtype=torch.long, device=self.device)
+        self.o_gt = torch.empty(size=(opt.batchsize,), dtype=torch.long, device=self.device)
         self.i_label = torch.empty(size=(self.opt.batchsize,), dtype=torch.float32, device=self.device)
+        self.o_label = torch.empty(size=(self.opt.batchsize,), dtype=torch.float32, device=self.device)
 
         ##
         # Setup optimizer
@@ -779,7 +763,6 @@ class Ganomaly(BaseModel):
             self.optimizer_o.step()
 
             if self.err_i.item() < 1e-5: self.reinit_o()
-
 
 #
 # class Classifier(Ganomaly):
