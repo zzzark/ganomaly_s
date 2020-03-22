@@ -16,8 +16,10 @@ from scipy.optimize import brentq
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 from matplotlib import rc
+
 rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
 rc('text', usetex=True)
+
 
 def evaluate(labels, scores, metric='roc'):
     if metric == 'roc':
@@ -27,10 +29,11 @@ def evaluate(labels, scores, metric='roc'):
     elif metric == 'f1_score':
         threshold = 0.20
         scores[scores >= threshold] = 1
-        scores[scores <  threshold] = 0
+        scores[scores < threshold] = 0
         return f1_score(labels, scores)
     else:
         raise NotImplementedError("Check the evaluation metric.")
+
 
 ##
 def roc(labels, scores, saveto=None):
@@ -53,7 +56,7 @@ def roc(labels, scores, saveto=None):
         plt.figure()
         lw = 2
         plt.plot(fpr, tpr, color='darkorange', lw=lw, label='(AUC = %0.2f, EER = %0.2f)' % (roc_auc, eer))
-        plt.plot([eer], [1-eer], marker='o', markersize=5, color="navy")
+        plt.plot([eer], [1 - eer], marker='o', markersize=5, color="navy")
         plt.plot([0, 1], [1, 0], color='navy', lw=1, linestyle=':')
         plt.xlim([0.0, 1.0])
         plt.ylim([0.0, 1.05])
@@ -66,6 +69,44 @@ def roc(labels, scores, saveto=None):
 
     return roc_auc
 
+
 def auprc(labels, scores):
     ap = average_precision_score(labels, scores)
     return ap
+
+
+def classII(preps, labels, a=1):
+    """
+
+    Args:
+        preps:  network output
+        labels: real_labels
+        a:  F-measure parameter
+
+    Returns:
+        acc :Accuracy
+        pre :Precision
+        rec :Recall
+
+    """
+    sum = len(labels)
+    TP, TN, FP, FN = 0, 0, 0, 0
+    preps = preps.cpu().numpy()
+
+    for i, label in enumerate(labels):
+        if label == 1 and preps[i] == label:
+            TP += 1
+        elif label == 0 and preps[i] == label:
+            TN += 1
+        elif label == 1 and preps[i] != label:
+            FN += 1
+        elif label == 0 and preps[i] != label:
+            FP += 1
+
+    acc = (TP + TN) / sum
+    pre = TP / (TP + FP)
+    rec = TP / (TP + FN)
+    f_mea = ((a ** 2 + 1) * pre * rec) / \
+            (a ** 2(pre + rec))
+
+    return acc, pre, rec, f_mea

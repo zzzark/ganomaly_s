@@ -19,7 +19,7 @@ import torchvision.utils as vutils
 from lib.networks import NetG, NetD, NetC, weights_init
 from lib.visualizer import Visualizer
 from lib.loss import l1_loss, l2_loss, l3_loss
-from lib.evaluate import evaluate
+from lib.evaluate import evaluate, auprc
 
 from lib.data import set_dataset
 
@@ -66,10 +66,12 @@ class BaseModel():
                 self.i_input.resize_(input[0].size()).copy_(input[0])
                 self.i_gt.resize_(input[1].size()).copy_(input[1])
                 self.i_label.resize_(input[1].size())
+                self.i_real_label.resize_(input[1].size()).copy_(input[1])
             if net == 'o':
                 self.o_input.resize_(input[0].size()).copy_(input[0])
                 self.o_gt.resize_(input[1].size()).copy_(input[1])
                 self.o_label.resize_(input[1].size())
+                self.o_real_label.resize_(input[1].size()).copy_(input[1])
 
     ##
     def seed(self, seed_value):
@@ -361,7 +363,7 @@ class BaseModel():
         ##
         # TRAIN
         self.total_steps = 0
-        best_auc = 0
+        best_ap = 0
 
         # Train for niter epochs.
         print(">> Training model classifier")
@@ -369,10 +371,10 @@ class BaseModel():
             # Train for one epoch
             self.z_train_one_epoch()
             res = self.z_test()
-            if res['AUC'] > best_auc:
-                best_auc = res['AUC']
+            if res['AP'] > best_ap:
+                best_ap = res['AP']
                 self.z_save_weights(self.epoch)
-            self.visualizer.print_current_performance(res, best_auc)
+            self.visualizer.print_current_performance(res, best_ap)
         print(">> Training model %s.[Done]" % self.name)
 
     ##
@@ -383,6 +385,7 @@ class BaseModel():
         self.netc_i.train()
         self.netc_o.train()
         epoch_iter = 0
+
         for data in tqdm(self.z_dataloader['i_train'], leave=False, total=len(self.z_dataloader['i_train'])):
             self.total_steps += self.opt.batchsize
             epoch_iter += self.opt.batchsize
@@ -499,12 +502,8 @@ class BaseModel():
                 self.times.append(time_o - time_i)
 
                 # Save test images.
-            print('test:')
-            n=5
-            print(self.i_pred[:n])
-            print(self.i_gt_labels[:n])
-            print(self.o_pred[:n])
-            print(self.o_gt_labels[:n])
+
+            #print(auprc(self.i_gt_labels.cpu(), self.i_pred.cpu()))
             """
             data=[]
             feature = self.last_feature.cpu().numpy().reshape(self.last_feature.size()[0], -1)
@@ -527,8 +526,8 @@ class BaseModel():
             self.times = np.mean(self.times[:100] * 1000)
 
             # auc, eer = roc(self.gt_labels, self.an_scores)
-            auc = evaluate(self.gt_labels, self.an_scores, metric=self.opt.metric)
-            performance = OrderedDict([('Avg Run Time (ms/batch)', self.times), ('AUC', auc)])
+            ap = auprc(self.i_gt_labels.cpu(), self.i_pred.cpu())
+            performance = OrderedDict([('Avg Run Time (ms/batch)', self.times), ('AP', ap)])
 
             if self.opt.display_id > 0 and self.opt.phase == 'test':
                 counter_ratio = float(epoch_iter) / len(self.dataloader['test'].dataset)
@@ -606,6 +605,10 @@ class Ganomaly(BaseModel):
         self.o_gt = torch.empty(size=(opt.batchsize,), dtype=torch.long, device=self.device)
         self.i_label = torch.empty(size=(self.opt.batchsize,), dtype=torch.float32, device=self.device)
         self.o_label = torch.empty(size=(self.opt.batchsize,), dtype=torch.float32, device=self.device)
+        self.i_real_label = torch.zeros(size=(self.opt.batchsize,), dtype=torch.float32,
+                                        device=self.device)
+        self.o_real_label = torch.zeros(size=(self.opt.batchsize,), dtype=torch.float32,
+                                        device=self.device)
 
         ##
         # Setup optimizer
@@ -712,7 +715,7 @@ class Ganomaly(BaseModel):
         """ Backpropagate through netC_i
         """
         # Real - Fake Loss
-        self.err_i = self.l_bce(self.pred_abn_i, self.real_label)
+        self.err_i = self.l_bce(self.pred_abn_i, self.i_real_label)
 
         # NetD Loss & Backward-Pass
         self.err_i.backward()
@@ -721,7 +724,7 @@ class Ganomaly(BaseModel):
         """ Backpropagate through netC_o
         """
         # Real - Fake Loss
-        self.err_o = self.l_bce(self.pred_abn_o, self.real_label)
+        self.err_o = self.l_bce(self.pred_abn_o, self.o_real_label)
 
         # NetD Loss & Backward-Pass
         self.err_o.backward()
@@ -762,137 +765,6 @@ class Ganomaly(BaseModel):
             self.backward_o()
             self.optimizer_o.step()
 
-            if self.err_i.item() < 1e-5: self.reinit_o()
+            if self.err_o.item() < 1e-5: self.reinit_o()
 
 #
-# class Classifier(Ganomaly):
-#     """Classifier Class
-#     """
-#
-#
-#     @property
-#     def name(self):
-#         return 'Classifier'
-#
-#     def __init__(self, opt, dataloader):
-#         super(Ganomaly, self).__init__(opt, dataloader)
-#
-#         self.z_dataloader = dataloader
-#
-#         self.netc_i = NetC(self.opt).to(self.device)
-#         self.netc_o = NetC(self.opt).to(self.device)
-#         self.netc_i.apply(weights_init)
-#         self.netc_o.apply(weights_init)
-#
-#         if self.opt.isTrain:
-#             self.netc_i.train()
-#             self.netc_o.train()
-#             self.optimizer_i = optim.Adam(self.netc_i.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
-#             self.optimizer_o = optim.Adam(self.netc_o.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
-#
-#     def save_weights_z(self, epoch):
-#         """Save netG and netD weights for the current epoch.
-#
-#         Args:
-#             epoch ([int]): Current epoch number.
-#         """
-#
-#         weight_dir = os.path.join(self.opt.outf, self.opt.name, 'train', 'weights')
-#         if not os.path.exists(weight_dir): os.makedirs(weight_dir)
-#
-#         torch.save({'epoch': epoch + 1, 'state_dict': self.netC_i.state_dict()},
-#                    '%s/netC_i.pth' % (weight_dir))
-#         torch.save({'epoch': epoch + 1, 'state_dict': self.netC_o.state_dict()},
-#                    '%s/netC_o.pth' % (weight_dir))
-#
-#     def forward_i(self):
-#         """ Forward propagate through netC_i
-#         """
-#         self.pred_abn_i = self.netc_i(self.input)
-#
-#     def forward_o(self):
-#         """ Forward propagate through netC_o
-#         """
-#         self.pred_abn_o = self.netc_o(self.input)
-#
-#     def backward_i(self):
-#         """ Backpropagate through netC_i
-#         """
-#         # Real - Fake Loss
-#         self.err_i = self.l_bce(self.pred_abn_i, self.real_label)
-#
-#         # NetD Loss & Backward-Pass
-#         self.err_i.backward()
-#
-#     def backward_o(self):
-#         """ Backpropagate through netC_o
-#         """
-#         # Real - Fake Loss
-#         self.err_o = self.l_bce(self.pred_abn_o, self.real_label)
-#
-#         # NetD Loss & Backward-Pass
-#         self.err_o.backward()
-#
-#     def reinit_i(self):
-#         """ Re-initialize the weights of netC_i
-#         """
-#         self.netc_i.apply(weights_init)
-#         if (self.opt.strengthen != 1): print('   Reloading net i')
-#
-#     def reinit_o(self):
-#         """ Re-initialize the weights of netC_o
-#         """
-#         self.netc_o.apply(weights_init)
-#         if (self.opt.strengthen != 1): print('   Reloading net o')
-#
-#     def optimize_params(self):
-#         """ Forwardpass, Loss Computation and Backwardpass.
-#         """
-#         # Forward-pass
-#         self.forward_i()
-#         self.forward_o()
-#
-#         # Backward-pass
-#         # netc_i
-#         self.optimizer_i.zero_grad()
-#         self.backward_i()
-#         self.optimizer_i.step()
-#
-#         # netc_o
-#         self.optimizer_o.zero_grad()
-#         self.backward_o()
-#         self.optimizer_o.step()
-#         if self.err_i.item() < 1e-5: self.reinit_i()
-#         if self.err_i.item() < 1e-5: self.reinit_o()
-#
-# ##
-#     def z_train_one_epoch(self):
-#         """ Train the model for one epoch.
-#         """
-#
-#         self.netc_i.train()
-#         self.netc_o.train()
-#         epoch_iter = 0
-#         for data in tqdm(self.dataloader['train'], leave=False, total=len(self.dataloader['train'])):
-#             self.total_steps += self.opt.batchsize
-#             epoch_iter += self.opt.batchsize
-#
-#             self.set_input(data)
-#             # self.optimize()
-#             self.optimize_params()
-#
-#             if self.total_steps % self.opt.print_freq == 0:
-#                 errors = self.get_errors()
-#                 if self.opt.display:
-#                     counter_ratio = float(epoch_iter) / len(self.dataloader['train'].dataset)
-#                     self.visualizer.plot_current_errors(self.epoch, counter_ratio, errors)
-#
-#             if self.total_steps % self.opt.save_image_freq == 0:
-#                 # point
-#                 reals, fakes, fixed, fixed_reals = self.get_current_images()
-#                 self.visualizer.save_current_images(self.epoch, reals, fakes, fixed)
-#                 if self.opt.display:
-#                     self.visualizer.display_current_images(reals, fakes, fixed, fixed_reals)
-#
-#         print(">> Training model %s. Epoch %d/%d" % (self.name, self.epoch + 1, self.opt.niter))
-#         # self.visualizer.print_current_errors(self.epoch, errors)

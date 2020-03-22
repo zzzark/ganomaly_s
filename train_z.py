@@ -32,10 +32,5 @@ def train():
     model.z_train()
 
 
-
-
-    print('AUC:%f\n' % res['AUC'])
-
-
 if __name__ == '__main__':
     train()
