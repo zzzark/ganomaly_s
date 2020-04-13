@@ -38,7 +38,7 @@ def load_data(opt):
     if opt.dataset in ['cifar10']:
         splits = ['train', 'test']
         drop_last_batch = {'train': True, 'test': False}
-        shuffle = {'train': True, 'test': False}
+        shuffle = {'train': True, 'test': True}
 
         transform = transforms.Compose(
             [
