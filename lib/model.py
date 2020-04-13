@@ -249,6 +249,8 @@ class BaseModel():
                                         device=self.device)
             self.latent_o = torch.zeros(size=(len(self.dataloader['test'].dataset), self.opt.nz), dtype=torch.float32,
                                         device=self.device)
+            self.d_pred = torch.zeros(size=(len(self.dataloader['test'].dataset),), dtype=torch.float32,
+                                      device=self.device)
             self.last_feature = torch.zeros(size=(
                 len(self.dataloader['test'].dataset),
                 list(self.netd.children())[0][-3].out_channels,
@@ -265,7 +267,7 @@ class BaseModel():
                 time_i = time.time()
                 self.set_input(data)
                 self.fake, latent_i, latent_o = self.netg(self.input)
-                _, features = self.netd(self.input)
+                d_pred, features = self.netd(self.input)
 
                 error = torch.mean(torch.pow((latent_i - latent_o), 2), dim=1)
                 time_o = time.time()
@@ -278,6 +280,8 @@ class BaseModel():
                     error.size(0), self.opt.nz)
                 self.latent_o[i * self.opt.batchsize: i * self.opt.batchsize + error.size(0), :] = latent_o.reshape(
                     error.size(0), self.opt.nz)
+                self.d_pred[i * self.opt.batchsize: i * self.opt.batchsize + d_pred.size(0)] = d_pred.reshape(
+                    d_pred.size(0))
                 self.last_feature[i * self.opt.batchsize: i * self.opt.batchsize + error.size(0), :] = features.reshape(
                     error.size(0),
                     list(self.netd.children())[0][-3].out_channels,
@@ -297,8 +301,7 @@ class BaseModel():
             """
             data=[]
             feature = self.last_feature.cpu().numpy().reshape(self.last_feature.size()[0], -1)
-            label = self.gt_labels.cpu().numpy().reshape(self.last_feature.size()[0], -1)
-
+            label = self.gt_labels.cpu().numpy().reshape(self.last_feature.size()[0], -1)            
             features_dir = './features'
             file_name = 'features_map.csv'
             feature_path = os.path.join(features_dir, file_name + '.txt')
@@ -306,10 +309,12 @@ class BaseModel():
             feature.tolist()
             label.tolist()
             test = pd.DataFrame(data=feature)
-            test.to_csv("./1.csv", mode='a+', index=None, header=None)
+            test.to_csv("./feature.csv", mode='a+', index=None, header=None)
             test = pd.DataFrame(data=label)
-            test.to_csv("./2.csv", mode='a+', index=None, header=None)
-            print('END')"""
+            test.to_csv("./label.csv", mode='a+', index=None, header=None)
+            print('END')
+            """
+
 
             # Measure inference time.
             self.times = np.array(self.times)
@@ -363,18 +368,18 @@ class BaseModel():
         ##
         # TRAIN
         self.total_steps = 0
-        best_ap = 0
+        best = 0
 
         # Train for niter epochs.
         print(">> Training model classifier")
         for self.epoch in range(self.opt.iter, self.opt.niter):
             # Train for one epoch
             self.z_train_one_epoch()
-            res = self.z_test()
-            if res['AP'] > best_ap:
-                best_ap = res['AP']
+            res, _ = self.z_test()
+            if res[self.opt.z_metric] > best:
+                best = res[self.opt.z_metric]
                 self.z_save_weights(self.epoch)
-            self.visualizer.print_current_performance(res, best_ap)
+            self.visualizer.print_current_performance(res, best, self.opt.z_metric)
         print(">> Training model %s.[Done]" % self.name)
 
     ##
@@ -474,10 +479,7 @@ class BaseModel():
 
                 time_o = time.time()
 
-                # self.an_scores[i * self.opt.batchsize: i * self.opt.batchsize + error.size(0)] = error.reshape(
-                #     error.size(0))
-                # self.gt_labels[i * self.opt.batchsize: i * self.opt.batchsize + error.size(0)] = self.gt.reshape(
-                #     error.size(0))
+
                 self.i_pred[i * self.opt.batchsize: i * self.opt.batchsize + i_pred.size(0)] = i_pred.reshape(
                     i_pred.size(0))
                 self.i_gt_labels[i * self.opt.batchsize: i * self.opt.batchsize + i_pred.size(0)] = self.i_gt.reshape(
@@ -503,38 +505,29 @@ class BaseModel():
 
                 # Save test images.
 
-            #print(auprc(self.i_gt_labels.cpu(), self.i_pred.cpu()))
-            """
-            data=[]
-            feature = self.last_feature.cpu().numpy().reshape(self.last_feature.size()[0], -1)
-            label = self.gt_labels.cpu().numpy().reshape(self.last_feature.size()[0], -1)
-
-            features_dir = './features'
-            file_name = 'features_map.csv'
-            feature_path = os.path.join(features_dir, file_name + '.txt')
-            import pandas as pd
-            feature.tolist()
-            label.tolist()
-            test = pd.DataFrame(data=feature)
-            test.to_csv("./1.csv", mode='a+', index=None, header=None)
-            test = pd.DataFrame(data=label)
-            test.to_csv("./2.csv", mode='a+', index=None, header=None)
-            print('END')"""
+            # print(auprc(self.i_gt_labels.cpu(), self.i_pred.cpu()))
+            print((self.i_gt_labels.cpu()[:10], self.i_pred.cpu())[:10])
 
             # Measure inference time.
             self.times = np.array(self.times)
             self.times = np.mean(self.times[:100] * 1000)
 
             # auc, eer = roc(self.gt_labels, self.an_scores)
-            ap = auprc(self.i_gt_labels.cpu(), self.i_pred.cpu())
-            performance = OrderedDict([('Avg Run Time (ms/batch)', self.times), ('AP', ap)])
+            self.pred_c = self.i_gt_labels.cpu() * self.opt.w_i + \
+                self.o_gt_labels.cpu() * self.opt.w_o
+            if (self.opt.z_metric=='ap'):
+                i_eva = auprc(self.i_gt_labels.cpu(), self.i_pred.cpu())
+                o_eva = auprc(self.o_gt_labels.cpu(), self.o_pred.cpu())
+            elif (self.opt.z_metric=='roc'):
+                i_eva = evaluate(self.i_gt_labels.cpu(), self.i_pred.cpu())
+                o_eva = evaluate(self.o_gt_labels.cpu(), self.o_pred.cpu())
+            i_performance = OrderedDict([('Avg Run Time (ms/batch)', self.times), (self.opt.z_metric, i_eva)])
+            o_performance = OrderedDict([('Avg Run Time (ms/batch)', self.times), (self.opt.z_metric, o_eva)])
 
             if self.opt.display_id > 0 and self.opt.phase == 'test':
-                counter_ratio = float(epoch_iter) / len(self.dataloader['test'].dataset)
-                self.visualizer.plot_performance(self.epoch, counter_ratio, performance)
-            if self.opt.classifier:
-                self.z_dataloader = set_dataset(self.opt, self.latent_i, self.latent_o, self.gt_labels)
-            return performance
+                counter_ratio = float(epoch_iter) / len(self.z_dataloader['i_test'].dataset)
+                self.visualizer.plot_performance(self.epoch, counter_ratio, i_performance)
+            return i_performance, o_performance
 
 
 ##
@@ -560,10 +553,11 @@ class Ganomaly(BaseModel):
         self.netd = NetD(self.opt).to(self.device)
         self.netg.apply(weights_init)
         self.netd.apply(weights_init)
-        self.netc_i = NetC(self.opt).to(self.device)
-        self.netc_o = NetC(self.opt).to(self.device)
-        self.netc_i.apply(weights_init)
-        self.netc_o.apply(weights_init)
+        if self.opt.classifier:
+            self.netc_i = NetC(self.opt).to(self.device)
+            self.netc_o = NetC(self.opt).to(self.device)
+            self.netc_i.apply(weights_init)
+            self.netc_o.apply(weights_init)
 
         ##
         if self.opt.resume != '':
@@ -617,10 +611,11 @@ class Ganomaly(BaseModel):
             self.netd.train()
             self.optimizer_d = optim.Adam(self.netd.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
             self.optimizer_g = optim.Adam(self.netg.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
-            self.netc_i.train()
-            self.netc_o.train()
-            self.optimizer_i = optim.Adam(self.netc_i.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
-            self.optimizer_o = optim.Adam(self.netc_o.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
+            if self.opt.classifier:
+                self.netc_i.train()
+                self.netc_o.train()
+                self.optimizer_i = optim.Adam(self.netc_i.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
+                self.optimizer_o = optim.Adam(self.netc_o.parameters(), lr=self.opt.lr, betas=(self.opt.beta1, 0.999))
 
     ##
     def forward_g(self):

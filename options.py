@@ -58,6 +58,10 @@ class Options():
         self.parser.add_argument('--classifier', action='store_true', help='Use classifier to classify dataset[test]')
         self.parser.add_argument('--z_resume', default='', help="path to checkpoints (to continue training)")
         self.parser.add_argument('--z_load_weights', default='', help="path to checkpoints (to continue training)")
+        self.parser.add_argument('--w_i', type=float, default=0.3, help='i_latent classifier scores weight.')
+        self.parser.add_argument('--w_o', type=float, default=0.3, help='o_latent classifier scores weight.')
+        self.parser.add_argument('--w_d', type=float, default=0.4, help='discriminator scores weight.')
+        self.parser.add_argument('--z_metric', type=str, default='roc', help='Evaluation metric.')
         ##
         # Train
         self.parser.add_argument('--print_freq', type=int, default=100, help='frequency of showing training results on console')
