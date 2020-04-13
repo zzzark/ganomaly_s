@@ -419,7 +419,7 @@ def set_dataset(opt, i_latent, o_latent, labels, proportion=0.8):
 
     splits = ['i_train', 'i_test', 'o_train', 'o_test']
     drop_last_batch = {'i_train': True, 'i_test': False, 'o_train': True, 'o_test': False}
-    shuffle = {'i_train': True, 'i_test': True, 'o_train': True, 'o_test': True}
+    shuffle = {'i_train': True, 'i_test': False, 'o_train': True, 'o_test': False}
 
     dataset = {'i_train': TensorDataset(i_latent[:prop], labels[:prop]),
                'o_train': TensorDataset(o_latent[:prop], labels[:prop]),

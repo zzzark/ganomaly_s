@@ -315,7 +315,6 @@ class BaseModel():
             print('END')
             """
 
-
             # Measure inference time.
             self.times = np.array(self.times)
             self.times = np.mean(self.times[:100] * 1000)
@@ -375,7 +374,7 @@ class BaseModel():
         for self.epoch in range(self.opt.iter, self.opt.niter):
             # Train for one epoch
             self.z_train_one_epoch()
-            res, _ = self.z_test()
+            res = self.z_test()
             if res[self.opt.z_metric] > best:
                 best = res[self.opt.z_metric]
                 self.z_save_weights(self.epoch)
@@ -479,7 +478,6 @@ class BaseModel():
 
                 time_o = time.time()
 
-
                 self.i_pred[i * self.opt.batchsize: i * self.opt.batchsize + i_pred.size(0)] = i_pred.reshape(
                     i_pred.size(0))
                 self.i_gt_labels[i * self.opt.batchsize: i * self.opt.batchsize + i_pred.size(0)] = self.i_gt.reshape(
@@ -506,28 +504,29 @@ class BaseModel():
                 # Save test images.
 
             # print(auprc(self.i_gt_labels.cpu(), self.i_pred.cpu()))
-            print((self.i_gt_labels.cpu()[:10], self.i_pred.cpu())[:10])
+            # print((self.i_gt_labels.cpu()[:10], self.i_pred.cpu())[:10])
 
             # Measure inference time.
             self.times = np.array(self.times)
             self.times = np.mean(self.times[:100] * 1000)
 
             # auc, eer = roc(self.gt_labels, self.an_scores)
-            self.pred_c = self.i_gt_labels.cpu() * self.opt.w_i + \
-                self.o_gt_labels.cpu() * self.opt.w_o
-            if (self.opt.z_metric=='ap'):
-                i_eva = auprc(self.i_gt_labels.cpu(), self.i_pred.cpu())
-                o_eva = auprc(self.o_gt_labels.cpu(), self.o_pred.cpu())
-            elif (self.opt.z_metric=='roc'):
-                i_eva = evaluate(self.i_gt_labels.cpu(), self.i_pred.cpu())
-                o_eva = evaluate(self.o_gt_labels.cpu(), self.o_pred.cpu())
-            i_performance = OrderedDict([('Avg Run Time (ms/batch)', self.times), (self.opt.z_metric, i_eva)])
-            o_performance = OrderedDict([('Avg Run Time (ms/batch)', self.times), (self.opt.z_metric, o_eva)])
+
+            self.pred_c = self.i_pred.cpu() * self.opt.w_i + \
+                          self.o_pred.cpu() * self.opt.w_o
+
+            # print(self.i_pred.cpu()[:5])
+            # print(self.o_pred.cpu()[:5])
+            # print(self.pred_c[:5])
+            # print(self.i_gt_labels[:10])
+            # print(self.o_gt_labels[:10])
+            scores = evaluate(self.o_gt_labels.cpu(), self.pred_c, self.opt.z_metric)
+            performance = OrderedDict([('Avg Run Time (ms/batch)', self.times), (self.opt.z_metric, scores)])
 
             if self.opt.display_id > 0 and self.opt.phase == 'test':
                 counter_ratio = float(epoch_iter) / len(self.z_dataloader['i_test'].dataset)
-                self.visualizer.plot_performance(self.epoch, counter_ratio, i_performance)
-            return i_performance, o_performance
+                self.visualizer.plot_performance(self.epoch, counter_ratio, performance)
+            return performance
 
 
 ##
