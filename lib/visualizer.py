@@ -139,7 +139,7 @@ class Visualizer():
             log_file.write('%s\n' % message)
 
     ##
-    def print_current_performance(self, performance, best):
+    def print_current_performance(self, performance, best, matrix='AUC'):
         """ Print current performance results.
 
         Args:
@@ -149,7 +149,7 @@ class Visualizer():
         message = '   '
         for key, val in performance.items():
             message += '%s: %.3f ' % (key, val)
-        message += 'max AUC: %.3f' % best
+        message += 'max %s: %.3f' % (matrix, best)
 
         print(message)
         with open(self.log_name, "a") as log_file:
