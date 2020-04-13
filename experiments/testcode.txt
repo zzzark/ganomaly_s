@@ -1,0 +1,19 @@
+## test and visulty
+python test.py --dataset fabric --isize 128 --load_weights --strengthen 2 --display --nz 1024
+## train netc
+python train_z.py --dataset fabric --isize 128 --load_weights --strengthen 1 --display --nz 1024 --classifier
+
+
+## train ganomaly_s for mnist
+# train g-net and d-net 
+python train.py --dataset mnist --isize 32 --nc 1 --niter 15 --manualseed 1 --nz 256 --abnormal_class 2
+# train c-net 
+python train_z.py --dataset mnist --isize 32 --load_weights --strengthen 1 --display --nz 256 --classifier --nc 1 --abnormal_class 2
+
+## train ganomaly_s for cifar10
+#"plane" "car" "bird" "cat" "deer" "dog" "frog" "horse" "ship" "truck"
+#train g-net and d-net
+python train.py --dataset cifar10 --isize 32 --niter 15 --manualseed 1 --nz 256 --abnormal_class plane
+#train c-net
+python train_z.py --dataset cifar10 --isize 32 --load_weights --strengthen 1 --display --nz 256 --classifier --nc 3 --z_metric roc --abnormal_class plane
+
