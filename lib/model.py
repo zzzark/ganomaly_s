@@ -379,6 +379,7 @@ class BaseModel():
                 best = res[self.opt.z_metric]
                 self.z_save_weights(self.epoch)
             self.visualizer.print_current_performance(res, best, self.opt.z_metric)
+        self.visualizer.record_best(best, self.opt.z_metric, self.opt.abnormal_class, self.opt.manualseed, 'ganomaly_s')
         print(">> Training model %s.[Done]" % self.name)
 
     ##
@@ -469,13 +470,13 @@ class BaseModel():
             self.times = []
             self.total_steps = 0
             epoch_iter = 0
+
             for i, data in enumerate(self.z_dataloader['i_test'], 0):
                 self.total_steps += self.opt.batchsize
                 epoch_iter += self.opt.batchsize
                 time_i = time.time()
                 self.z_set_input('i', data)
                 i_pred = self.netc_i(self.i_input)
-
                 time_o = time.time()
 
                 self.i_pred[i * self.opt.batchsize: i * self.opt.batchsize + i_pred.size(0)] = i_pred.reshape(
@@ -515,11 +516,10 @@ class BaseModel():
             self.pred_c = self.i_pred.cpu() * self.opt.w_i + \
                           self.o_pred.cpu() * self.opt.w_o
 
-            # print(self.i_pred.cpu()[:5])
-            # print(self.o_pred.cpu()[:5])
+
             # print(self.pred_c[:5])
-            # print(self.i_gt_labels[:10])
-            # print(self.o_gt_labels[:10])
+            # print(self.i_gt_labels[:5])
+
             scores = evaluate(self.o_gt_labels.cpu(), self.pred_c, self.opt.z_metric)
             performance = OrderedDict([('Avg Run Time (ms/batch)', self.times), (self.opt.z_metric, scores)])
 

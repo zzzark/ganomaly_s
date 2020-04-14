@@ -296,12 +296,12 @@ class Visualizer():
     def display_latent(self, latent_is, latent_os, labels, win=9, iter=1000, message=False, n_components=2):
         from sklearn.discriminant_analysis import LinearDiscriminantAnalysis
 
-        if message:print('latent visualizer loading data')
+        if message: print('latent visualizer loading data')
         latent_i = latent_is[:iter].cpu().numpy()
         latent_o = latent_os[:iter].cpu().numpy()
         latent = np.concatenate([latent_i, latent_o])
         label = labels[:iter].cpu().numpy() + np.ones(1000)
-        label = np.concatenate([label, label+np.ones(1000)*2])
+        label = np.concatenate([label, label + np.ones(1000) * 2])
 
         lda = LinearDiscriminantAnalysis(n_components=n_components)
         lda.fit(latent, label)
@@ -311,3 +311,22 @@ class Visualizer():
             markersize=3,
             legend=['Normal_i', 'Abnormal_i', 'Normal_o', 'Abnormal_o']
         ))
+
+    ##
+    def record_best(self, best, matrix='AUC', abnormal='', manualseed=-1, model_name=''):
+        """ Print current performance results.
+
+        Args:
+            performance ([OrderedDict]): Performance of the model
+            best ([int]): Best performance.
+        """
+        message = ' '
+        message += '%s  ' % model_name
+        message += 'abnormal_class: %-7s  ' % abnormal
+        message += 'manualseed :%-2d' % manualseed
+        message += 'max %s: %.3f' % (matrix, best)
+
+        print(message)
+        log_name = os.path.join(self.opt.outf, self.opt.name, 'best_log.txt')
+        with open(log_name, "a") as log_file:
+            log_file.write('%s\n' % message)
