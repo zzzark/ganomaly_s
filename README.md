@@ -1,6 +1,6 @@
-# GANomaly
+# GANomaly_s
 
-This repository contains PyTorch implementation of the following paper: GANomaly: Semi-Supervised Anomaly Detection via Adversarial Training [[1]](#reference)
+This repository modification PyTorch implementation of the following paper: GANomaly: Semi-Supervised Anomaly Detection via Adversarial Training [[1]](#reference)
 
 ##  1. Table of Contents
 - [GANomaly](#ganomaly)
