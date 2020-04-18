@@ -38,10 +38,10 @@ To replicate the results in the paper for MNIST and CIFAR10  datasets, run the f
 
 ``` shell
 # MNIST
-sh experiments/run_mnist.sh
+sh experiments/run_mnist_s.sh
 
 # CIFAR
-sh experiments/run_cifar.sh # CIFAR10
+sh experiments/run_cifar_s.sh # CIFAR10
 ```
 
 ## 4. Training
@@ -54,23 +54,63 @@ python train.py -h
 To train the model on MNIST dataset for a given anomaly class, run the following:
 
 ``` 
-python train.py \
-    --dataset mnist                         \
-    --niter <number-of-epochs>              \
-    --abnormal_class <0,1,2,3,4,5,6,7,8,9>  \
-    --display                               # optional if you want to visualize     
+python train.py 				\
+	--dataset mnist				\
+	--isize 32				\
+	--nc 1					\
+	--niter <number-of-epochs>		\
+	--manualseed 1				\
+	--nz 256				\
+	--abnormal_class <0,1,2,3,4,5,6,7,8,9>	\
+	--display                               # optional if you want to visualize     
+```
+
+Wait for first stage finish.Then run the following:
+
+``` 
+python train_z.py 				\
+    --dataset mnist				\
+    --isize 32 					\
+    --load_weights				\
+    --niter <number-of-epochs>        	  	\
+    --strengthen 1				\
+    --nz 256					\
+    --classifier				\
+    --nc 1					\
+    --z_metric roc				\
+    --manualseed 1				\ # optional if you want to set seed
+    --abnormal_class <0,1,2,3,4,5,6,7,8,9>	\
+    --display					# optional if you want to visualize     
 ```
 
 ### 4.2. Training on CIFAR10
 To train the model on CIFAR10 dataset for a given anomaly class, run the following:
 
 ``` 
-python train.py \
-    --dataset cifar10                                                   \
-    --niter <number-of-epochs>                                          \
-    --abnormal_class                                                    \
-        <plane, car, bird, cat, deer, dog, frog, horse, ship, truck>    \
-    --display                       # optional if you want to visualize        
+python train.py					\
+	--dataset cifar10			\
+	--isize 32				\
+	--niter <number-of-epochs>		\
+	--nz 256				\
+	--manualseed 1				\  #optional if you want to set seed
+	--abnormal_class cat			\
+	<plane, car, bird, cat, deer, dog, frog, horse, ship, truck>	\
+	--display			# optional if you want to visualize   
+```
+Wait for first stage finish.Then run the following:
+
+``` 
+python train_z.py				\
+	--dataset cifar10			\
+	--isize 32				\
+	--load_weights				\
+	--strengthen 1				\
+	--nz 256				\
+	--classifier				\
+	--z_metric roc				\
+	--manualseed 1				\ #optional if you want to set seed
+	--abnormal_class cat			\
+	--display			# optional if you want to visualize
 ```
 
 ### 4.3. Train on Custom Dataset
@@ -101,27 +141,27 @@ Custom Dataset
 Then model training is the same as training MNIST or CIFAR10 datasets explained above.
 
 ```
-python train.py                     \
-    --dataset <name-of-the-data>    \
-    --isize <image-size>            \
-    --niter <number-of-epochs>      \
-    --display                       # optional if you want to visualize
+python train.py 
+	--dataset <name-of-the-data>	\
+	--isize  <image-size>		\
+	--strengthen 1			\
+	--niter <number-of-epochs>	\
+	--nz 1024			\
+	--display 	# optional if you want to visualize
+```
+
+Wait for first stage finish.Then run the following:
+
+```
+python train_z.py		\
+	--dataset <name-of-the-data>	\
+	--isize <image-size> 		\
+	--niter <number-of-epochs>	\
+	--load_weights 			\
+	--strengthen 1 			\
+	--classifier			\
+	--nz 1024 			\
+	--display	# optional if you want to visualize
 ```
 
 For more training options, run `python train.py -h`.
-
-## 5. Citing GANomaly
-If you use this repository or would like to refer the paper, please use the following BibTeX entry
-```
-@inproceedings{akcay2018ganomaly,
-  title={Ganomaly: Semi-supervised anomaly detection via adversarial training},
-  author={Akcay, Samet and Atapour-Abarghouei, Amir and Breckon, Toby P},
-  booktitle={Asian Conference on Computer Vision},
-  pages={622--637},
-  year={2018},
-  organization={Springer}
-}
-```
-
-## 6. Reference
-[1]  Akcay S., Atapour-Abarghouei A., Breckon T.P. (2019) GANomaly: Semi-supervised Anomaly Detection via Adversarial Training. In: Jawahar C., Li H., Mori G., Schindler K. (eds) Computer Vision – ACCV 2018. ACCV 2018. Lecture Notes in Computer Science, vol 11363. Springer, Cham
