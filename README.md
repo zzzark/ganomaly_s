@@ -18,7 +18,7 @@ This repository modification PyTorch implementation of the following paper: GANo
 ## 2. Installation
 1. First clone the repository
    ```
-   git clone https://github.com/samet-akcay/ganomaly.git
+   git clone https://github.com/RForestLiu/ganomaly_s.git
    ```
 2. Create the virtual environment via conda
     ```
