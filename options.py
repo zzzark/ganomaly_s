@@ -8,11 +8,11 @@ Returns:
 
 import argparse
 import os
-import torch
+# import torch
 
 # pylint: disable=C0103,C0301,R0903,W0622
 
-class Options():
+class Options:
     """Options class
 
     Returns:
@@ -52,9 +52,9 @@ class Options():
         self.parser.add_argument('--proportion', type=float, default=0.1, help='Proportion of anomalies in test set.')
         self.parser.add_argument('--metric', type=str, default='roc', help='Evaluation metric.')
         ##
-        #strengthen
+        # strengthen
         self.parser.add_argument('--strengthen', type=int, default=0, help='Use strengthen tools.')
-        self.parser.add_argument('--tSNE', action='store_true', help='display t-SNE images, it will influent cpu')
+        self.parser.add_argument('--tSNE', action='store_true', help='display t-SNE images, it will influence cpu')
         self.parser.add_argument('--classifier', action='store_true', help='Use classifier to classify dataset[test]')
         self.parser.add_argument('--z_resume', default='', help="path to checkpoints (to continue training)")
         self.parser.add_argument('--z_load_weights', default='', help="path to checkpoints (to continue training)")
@@ -91,13 +91,13 @@ class Options():
         str_ids = self.opt.gpu_ids.split(',')
         self.opt.gpu_ids = []
         for str_id in str_ids:
-            id = int(str_id)
-            if id >= 0:
-                self.opt.gpu_ids.append(id)
+            id_ = int(str_id)
+            if id_ >= 0:
+                self.opt.gpu_ids.append(id_)
 
-        # set gpu ids
-        if self.opt.device == 'gpu':
-            torch.cuda.set_device(self.opt.gpu_ids[0])
+        # # set gpu ids
+        # if self.opt.device == 'gpu':
+        #     torch.cuda.set_device(self.opt.gpu_ids[0])
 
         args = vars(self.opt)
 

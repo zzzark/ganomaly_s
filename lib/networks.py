@@ -70,11 +70,11 @@ class Encoder(nn.Module):
 
         self.main = main
 
-    def forward(self, input):
+    def forward(self, input_):
         if self.ngpu > 1:
-            output = nn.parallel.data_parallel(self.main, input, range(self.ngpu))
+            output = nn.parallel.data_parallel(self.main, input_, range(self.ngpu))
         else:
-            output = self.main(input)
+            output = self.main(input_)
 
         return output
 

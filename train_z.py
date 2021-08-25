@@ -5,7 +5,7 @@
 # @File : train_z.py
 # @Software: PyCharm
 
-from __future__ import print_function
+# from __future__ import print_function
 
 from options import Options
 from lib.data import load_data

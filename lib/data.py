@@ -53,9 +53,8 @@ def load_data(opt):
             'dog': 5, 'frog': 6, 'horse': 7, 'ship': 8, 'truck': 9
         }
 
-        dataset = {}
-        dataset['train'] = CIFAR10(root='./data', train=True, download=True, transform=transform)
-        dataset['test'] = CIFAR10(root='./data', train=False, download=True, transform=transform)
+        dataset = {'train': CIFAR10(root='./data', train=True, download=True, transform=transform),
+                   'test': CIFAR10(root='./data', train=False, download=True, transform=transform)}
 
         dataset['train'].data, dataset['train'].targets, \
         dataset['test'].data, dataset['test'].targets = get_cifar_anomaly_dataset(
@@ -92,9 +91,8 @@ def load_data(opt):
             ]
         )
 
-        dataset = {}
-        dataset['train'] = MNIST(root='./data', train=True, download=True, transform=transform)
-        dataset['test'] = MNIST(root='./data', train=False, download=True, transform=transform)
+        dataset = {'train': MNIST(root='./data', train=True, download=True, transform=transform),
+                   'test': MNIST(root='./data', train=False, download=True, transform=transform)}
 
         dataset['train'].data, dataset['train'].targets, \
         dataset['test'].data, dataset['test'].targets = get_mnist_anomaly_dataset(
@@ -131,9 +129,8 @@ def load_data(opt):
             ]
         )
 
-        dataset = {}
-        dataset['train'] = MNIST(root='./data', train=True, download=True, transform=transform)
-        dataset['test'] = MNIST(root='./data', train=False, download=True, transform=transform)
+        dataset = {'train': MNIST(root='./data', train=True, download=True, transform=transform),
+                   'test': MNIST(root='./data', train=False, download=True, transform=transform)}
 
         dataset['train'].data, dataset['train'].targets, \
         dataset['test'].data, dataset['test'].targets = get_mnist2_anomaly_dataset(
@@ -382,7 +379,7 @@ def get_mnist2_anomaly_dataset(trn_img, trn_lbl, tst_img, tst_lbl, nrm_cls_idx=0
     abn_tst_lbl = tst_lbl[abn_tst_idx]  # Abnormal training labels.
 
     # --
-    # Assign labels to normal (0) and abnormals (1)
+    # Assign labels to normal (0) and abnormal (1)
     nrm_trn_lbl[:] = 0
     nrm_tst_lbl[:] = 0
     abn_trn_lbl[:] = 1
@@ -414,7 +411,7 @@ def set_dataset(opt, i_latent, o_latent, labels, proportion=0.8):
     o_latent = o_latent.cpu().reshape(len(o_latent), 1, int(opt.nz ** 0.5), -1)
     labels = labels.cpu()
 
-    if proportion > 0 and proportion < 1:
+    if 0 < proportion < 1:
         prop = int(len(labels) // (1 / proportion))
 
     splits = ['i_train', 'i_test', 'o_train', 'o_test']

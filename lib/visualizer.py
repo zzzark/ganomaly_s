@@ -12,9 +12,10 @@ import torchvision.utils as vutils
 import matplotlib.pyplot as plt
 import plotly.figure_factory as ff
 
+from multipledispatch import dispatch
 
 ##
-class Visualizer():
+class Visualizer:
     """ Visualizer wrapper based on Visdom.
 
     Returns:
@@ -155,7 +156,7 @@ class Visualizer():
         with open(self.log_name, "a") as log_file:
             log_file.write('%s\n' % message)
 
-    ##
+    @dispatch(object, object, object)
     def display_current_images(self, reals, fakes, fixed):
         """ Display current images.
 
@@ -176,7 +177,7 @@ class Visualizer():
         self.vis.images(fixed, win=3, opts={'title': 'Fixed'})
         self.vis.images(fixed_reals, win=4, opts={'title': 'fixed_reals'})
 
-    ##point
+    @dispatch(object, object, object, object)
     def display_current_images(self, reals, fakes, fixed, fixed_reals):
         """ Display current images.
 
@@ -198,8 +199,7 @@ class Visualizer():
         self.vis.images(fixed, win=3, opts={'title': 'Fixed'})
         self.vis.images(fixed_reals, win=4, opts={'title': 'fixed_reals'})
 
-    def display_curent_images_info(self, fix_fake_label, fix_real_label):
-
+    def display_current_images_info(self, fix_fake_label, fix_real_label):
         pass
 
     def display_current_images_test(self, reals, fakes, fixed, fixed_reals):
@@ -276,8 +276,8 @@ class Visualizer():
 
         :return: None
         """
-        labelss = labels[:iter].cpu().numpy()
-        labels = [i + 1 for i in labelss]
+        labels = labels[:iter].cpu().numpy()
+        labels = [i + 1 for i in labels]
         features = features[:iter].cpu().numpy().reshape(iter, -1)
 
         if alg == 't-SNE':
@@ -314,12 +314,6 @@ class Visualizer():
 
     ##
     def record_best(self, best, matrix='AUC', abnormal='', manualseed=-1, model_name=''):
-        """ Print current performance results.
-
-        Args:
-            performance ([OrderedDict]): Performance of the model
-            best ([int]): Best performance.
-        """
         message = ' '
         message += '%s  ' % model_name
         message += 'abnormal_class: %-7s  ' % abnormal

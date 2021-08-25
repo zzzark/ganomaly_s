@@ -8,7 +8,7 @@ Returns:
 
 ##
 # LIBRARIES
-from __future__ import print_function
+# from __future__ import print_function
 
 import os
 from sklearn.metrics import roc_curve, auc, average_precision_score, f1_score
@@ -75,6 +75,7 @@ def auprc(labels, scores):
     return ap
 
 
+# noinspection PyPep8Naming
 def classII(preps, labels, a=1):
     """
 
