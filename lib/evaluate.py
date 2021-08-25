@@ -4,11 +4,6 @@ Returns:
     auc, eer: Area under the curve, Equal Error Rate
 """
 
-# pylint: disable=C0103,C0301
-
-##
-# LIBRARIES
-# from __future__ import print_function
 
 import os
 from sklearn.metrics import roc_curve, auc, average_precision_score, f1_score
@@ -74,40 +69,3 @@ def auprc(labels, scores):
     ap = average_precision_score(labels, scores)
     return ap
 
-
-# noinspection PyPep8Naming
-def classII(preps, labels, a=1):
-    """
-
-    Args:
-        preps:  network output
-        labels: real_labels
-        a:  F-measure parameter
-
-    Returns:
-        acc :Accuracy
-        pre :Precision
-        rec :Recall
-
-    """
-    sum = len(labels)
-    TP, TN, FP, FN = 0, 0, 0, 0
-    preps = preps.cpu().numpy()
-
-    for i, label in enumerate(labels):
-        if label == 1 and preps[i] == label:
-            TP += 1
-        elif label == 0 and preps[i] == label:
-            TN += 1
-        elif label == 1 and preps[i] != label:
-            FN += 1
-        elif label == 0 and preps[i] != label:
-            FP += 1
-
-    acc = (TP + TN) / sum
-    pre = TP / (TP + FP)
-    rec = TP / (TP + FN)
-    f_mea = ((a ** 2 + 1) * pre * rec) / \
-            (a ** 2(pre + rec))
-
-    return acc, pre, rec, f_mea
